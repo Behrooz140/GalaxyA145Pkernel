@@ -15,39 +15,37 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs
           
-          # دانلود کامپایلر Clang
+          # 1. دانلود کامپایلر Clang
           rm -rf kernel/prebuilts/clang/host/linux-x86
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 kernel/prebuilts/clang/host/linux-x86
           
-          # دانلود Bazel Skylib
+          # 2. دانلود Bazel Skylib
           rm -rf kernel/external/bazel-skylib
           mkdir -p kernel/external
           git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
           
-          # دانلود قوانین پایه بیزل (تگ اندروید ۱۵ برای سازگاری با اسکریپت سامسونگ حفظ می‌شود)
+          # 3. دانلود قوانین پایه بیزل (تلاش برای شاخه مخصوص کرنل 6.6 اندروید 15 یا شاخه اصلی)
           rm -rf kernel/build/bazel_common_rules
-          git clone -b android-15.0.0_r1 --depth=1 https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules
+          git clone -b common-android15-6.6 --depth=1 https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules || git clone --depth=1 https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules
           
-          # دانلود JDK 11 (بدون تگ خاص، دانلود آخرین نسخه پایدار از شاخه اصلی)
+          # 4. دانلود JDK 11
           rm -rf kernel/prebuilts/jdk/jdk11
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/jdk/jdk11 kernel/prebuilts/jdk/jdk11
           
-          # دانلود ابزارهای سیستمی و sysroot (بدون تگ خاص، دانلود آخرین نسخه پایدار از شاخه اصلی)
-          rm -rf kernel/prebuilts/build-tools
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/build-tools kernel/prebuilts/build-tools
+          # 5. ساخت مسیر فیزیکی sysroot و تزریق فایل برای عبور قطعی از ارور empty glob
+          mkdir -p kernel/build/kernel/build-tools/sysroot
+          touch kernel/build/kernel/build-tools/sysroot/.keep
           
-          # ایجاد لینک سیمبولیک تا بیزل ابزارها را دقیقاً در مسیر هدفش پیدا کند
-          mkdir -p kernel/build/kernel
-          rm -rf kernel/build/kernel/build-tools
-          ln -sf ../../prebuilts/build-tools kernel/build/kernel/build-tools
-          
-          # لینک کردن مسیر اجرایی بیزل
+          # 6. لینک کردن مسیر اجرایی بیزل
           mkdir -p kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/
           ln -sf $(which bazel) kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel
           
-          # ایجاد فایل پایه برای جلوگیری از ارور پکیج
+          # 7. ایجاد فایل پایه بیلد
           touch kernel/build/BUILD.bazel
-
+          
+          # 8. جراحی فایل بیلد مدیاتک/سامسونگ و تزریق تارگت‌های فراموش شده
+          echo 'toolchain_type(name = "hermetic_tools_toolchain_type")' >> kernel/build/kernel/BUILD.bazel
+          echo 'toolchain_type(name = "hermetic_tools_toolchain")' >> kernel/build/kernel/BUILD.bazel
 
       - name: Build with Samsung Script
         run: |
