@@ -42,11 +42,7 @@ jobs:
           git checkout android-14.0.0_r1
           cd ../../..
           
-          # تبدیل پوشه‌های جدید به پکیج‌های معتبر برای بیزل
           touch kernel/build/bazel_common_rules/exec/BUILD.bazel
-          touch kernel/build/bazel_common_rules/exec/impl/BUILD.bazel
-
-
 
       - name: Build with Samsung Script
         run: |
