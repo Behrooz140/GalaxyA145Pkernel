@@ -13,7 +13,7 @@ jobs:
       - name: Set up Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip
+          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs
           
           # ساخت مسیر پیش‌نیازها و لینک کردن پایتون سرور
           mkdir -p kernel/prebuilts/build-tools/path/linux-x86/
