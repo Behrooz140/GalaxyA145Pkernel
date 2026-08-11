@@ -23,21 +23,20 @@ jobs:
           mkdir -p kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/
           ln -s $(which bazel) kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel
           
-          # پاکسازی فایل‌های خالی و دانلود رسمی کامپایلر Clang از گوگل
           rm -rf kernel/prebuilts/clang/host/linux-x86
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 kernel/prebuilts/clang/host/linux-x86
           
-          # پاکسازی پوشه خالی قبلی و دانلود کتابخانه استاندارد Bazel
           rm -rf kernel/external/bazel-skylib
           mkdir -p kernel/external
           git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
           
-          # ایجاد فایل BUILD در پوشه والد برای رفع ارور پکیج بیزل
           touch kernel/build/BUILD.bazel
 
-          # کلون کردن سورس کامل bazel_common_rules مستقیما از گوگل
           rm -rf kernel/build/bazel_common_rules
-          git clone --depth=1 https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules
+          git clone https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules
+          cd kernel/build/bazel_common_rules
+          git checkout android-14.0.0_r1
+cd ../../..
 
       - name: Build with Samsung Script
         run: |
