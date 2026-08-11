@@ -34,6 +34,9 @@ jobs:
           
           # ایجاد فایل BUILD در پوشه والد (build) برای عبور از ارور پکیج
           touch kernel/build/BUILD.bazel
+          touch kernel/build/bazel_common_rules/dist/BUILD.bazel
+          touch kernel/build/bazel_common_rules/BUILD.bazel
+
 
       - name: Build with Samsung Script
         run: |
