@@ -27,7 +27,8 @@ jobs:
           rm -rf kernel/prebuilts/clang/host/linux-x86
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 kernel/prebuilts/clang/host/linux-x86
           
-          # ایجاد مسیر و دانلود کتابخانه استاندارد Bazel
+          # پاکسازی پوشه خالی قبلی و دانلود کتابخانه استاندارد Bazel
+          rm -rf kernel/external/bazel-skylib
           mkdir -p kernel/external
           git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
 
