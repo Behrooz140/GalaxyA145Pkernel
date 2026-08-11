@@ -41,6 +41,10 @@ jobs:
           cd kernel/build/bazel_common_rules
           git checkout android-15.0.0_r1
           cd ../../..
+           
+          # دانلود رسمی JDK 11 از گوگل برای تامین ابزارهای جاوای Kleaf
+          rm -rf kernel/prebuilts/jdk/jdk11
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/jdk/jdk11 kernel/prebuilts/jdk/jdk11
 
       - name: Build with Samsung Script
         run: |
