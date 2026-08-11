@@ -33,13 +33,12 @@ jobs:
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android15-6.6 --depth=1
           repo sync -c -j$(nproc) --no-clone-bundle --no-tags
           
-          # راز اصلی اینجاست: انتقال ابزارها دقیقاً به داخل مسیر kernel
-          # استفاده از rsync برای ادغام بی‌نقص فایل‌های گوگل با سورس‌های سامسونگ
+          # انتقال ابزارها به داخل مسیر kernel با چشم‌پوشی از فایل‌های مخفی گیت
           cd ..
-          rsync -a --ignore-existing aosp_toolchain/build/ kernel/build/
-          rsync -a --ignore-existing aosp_toolchain/external/ kernel/external/
-          rsync -a --ignore-existing aosp_toolchain/prebuilts/ kernel/prebuilts/
-          rsync -a --ignore-existing aosp_toolchain/tools/ kernel/tools/
+          rsync -a --ignore-existing --exclude=".git" --exclude=".repo" aosp_toolchain/build/ kernel/build/
+          rsync -a --ignore-existing --exclude=".git" --exclude=".repo" aosp_toolchain/external/ kernel/external/
+          rsync -a --ignore-existing --exclude=".git" --exclude=".repo" aosp_toolchain/prebuilts/ kernel/prebuilts/
+          rsync -a --ignore-existing --exclude=".git" --exclude=".repo" aosp_toolchain/tools/ kernel/tools/
 
       - name: Build with Samsung Script
         run: |
