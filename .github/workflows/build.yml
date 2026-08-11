@@ -22,6 +22,11 @@ jobs:
           # ساخت مسیر و لینک کردن ابزار کامپایلر Bazel
           mkdir -p kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/
           ln -s $(which bazel) kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel
+          
+          # ایجاد فایل‌های BUILD ساختاری برای عبور از ارور پکیج
+          mkdir -p kernel/prebuilts/clang/host/linux-x86/kleaf
+          touch kernel/prebuilts/clang/host/linux-x86/kleaf/BUILD.bazel
+          touch kernel/prebuilts/clang/host/linux-x86/BUILD.bazel
 
       - name: Build with Samsung Script
         run: |
