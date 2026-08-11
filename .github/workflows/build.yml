@@ -15,26 +15,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs
           
-          # 1. دانلود کامپایلر Clang
+          # دانلود کامپایلر Clang
           rm -rf kernel/prebuilts/clang/host/linux-x86
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 kernel/prebuilts/clang/host/linux-x86
           
-          # 2. دانلود Bazel Skylib
+          # دانلود Bazel Skylib
           rm -rf kernel/external/bazel-skylib
           mkdir -p kernel/external
           git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
           
-          # 3. دانلود قوانین پایه بیزل (دقیقاً نسخه اندروید ۱۵)
+          # دانلود قوانین پایه بیزل (تگ اندروید ۱۵ برای سازگاری با اسکریپت سامسونگ حفظ می‌شود)
           rm -rf kernel/build/bazel_common_rules
           git clone -b android-15.0.0_r1 --depth=1 https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules
           
-          # 4. دانلود JDK 11 (دقیقاً نسخه اندروید ۱۵ برای اجرای اسکریپت‌های داخلی)
+          # دانلود JDK 11 (بدون تگ خاص، دانلود آخرین نسخه پایدار از شاخه اصلی)
           rm -rf kernel/prebuilts/jdk/jdk11
-          git clone -b android-15.0.0_r1 --depth=1 https://android.googlesource.com/platform/prebuilts/jdk/jdk11 kernel/prebuilts/jdk/jdk11
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/jdk/jdk11 kernel/prebuilts/jdk/jdk11
           
-          # 5. دانلود ابزارهای سیستمی و sysroot (دقیقاً نسخه اندروید ۱۵)
+          # دانلود ابزارهای سیستمی و sysroot (بدون تگ خاص، دانلود آخرین نسخه پایدار از شاخه اصلی)
           rm -rf kernel/prebuilts/build-tools
-          git clone -b android-15.0.0_r1 --depth=1 https://android.googlesource.com/platform/prebuilts/build-tools kernel/prebuilts/build-tools
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/build-tools kernel/prebuilts/build-tools
           
           # ایجاد لینک سیمبولیک تا بیزل ابزارها را دقیقاً در مسیر هدفش پیدا کند
           mkdir -p kernel/build/kernel
