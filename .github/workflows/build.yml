@@ -15,60 +15,38 @@ jobs:
       - name: Set up Environment & Sync AOSP Toolchains
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs python-is-python3
+          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs python-is-python3 rsync
           
-          # نصب ابزار repo گوگل برای دانلود یکپارچه محیط بیلد
+          # نصب ابزار repo گوگل
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           export PATH="~/bin:$PATH"
           
-          # تنظیمات ضروری گیت برای جلوگیری از ارور ابزار repo
+          # تنظیمات ضروری گیت
           git config --global user.name "Behrooz140"
           git config --global user.email "behrooz140@local.dev"
           
-          # دانلود یکپارچه تمام ابزارهای بیلد از گوگل (شاخه اندروید ۱۵ - کرنل ۶.۶)
+          # دانلود یکپارچه تمام ابزارهای بیلد از مخازن اندروید ۱۵ گوگل
           mkdir aosp_toolchain
           cd aosp_toolchain
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android15-6.6 --depth=1
           repo sync -c -j$(nproc) --no-clone-bundle --no-tags
           
-          # کپی دقیق ۴ پوشه حیاتی به روت سورس سامسونگ (طبق دستورالعمل README)
+          # راز اصلی اینجاست: انتقال ابزارها دقیقاً به داخل مسیر kernel
+          # استفاده از rsync برای ادغام بی‌نقص فایل‌های گوگل با سورس‌های سامسونگ
           cd ..
-          cp -r aosp_toolchain/build ./
-          cp -r aosp_toolchain/external ./
-          cp -r aosp_toolchain/prebuilts ./
-          cp -r aosp_toolchain/tools ./
+          rsync -a --ignore-existing aosp_toolchain/build/ kernel/build/
+          rsync -a --ignore-existing aosp_toolchain/external/ kernel/external/
+          rsync -a --ignore-existing aosp_toolchain/prebuilts/ kernel/prebuilts/
+          rsync -a --ignore-existing aosp_toolchain/tools/ kernel/tools/
 
       - name: Build with Samsung Script
         run: |
-          # ورود به پوشه کرنل طبق راهنمای سازنده
+          # ورود به پوشه کرنل
           cd kernel
           
-          # دانلود فایل‌های واقعی Kleaf برای کامپایلر Clang
-          rm -rf prebuilts/clang/host/linux-x86/kleaf
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 /tmp/clang
-          cp -r /tmp/clang/kleaf prebuilts/clang/host/linux-x86/
-          
-          # ساخت فایل بیلد خالی در روت Clang فقط برای شناساندن پکیج والد
-          touch prebuilts/clang/host/linux-x86/BUILD.bazel
-          
-          # لینک کردن پایتونِ سیستم به مسیر ایزوله‌ای که بیزل به دنبال آن می‌گردد
-          mkdir -p prebuilts/build-tools/path/linux-x86/
-          ln -sf /usr/bin/python3 prebuilts/build-tools/path/linux-x86/python3
-          
-          # لینک کردن بیزلِ سیستم به مسیر اختصاصی Kleaf
-          mkdir -p prebuilts/kernel-build-tools/bazel/linux-x86_64/
-          ln -sf $(which bazel) prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel
-          
-          # ساخت فایل کانفیگ دقیقاً با آرگومان‌های مدیاتک/سامسونگ
-          python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
-            --kernel-defconfig mediatek-bazel_defconfig \
-            --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
-            --kernel-build-config-overlays "" \
-            -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
-          
-          # اعمال متغیرهای محیطی ضروری برای کامپایل (قفل کردن نسخه بیزل)
+          # قفل کردن نسخه بیزل و اعمال متغیرهای محیطی ضروری
           export USE_BAZEL_VERSION=6.4.0
           export DEVICE_MODULES_DIR="kernel_device_modules-6.6"
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
@@ -78,7 +56,14 @@ jobs:
           export PROJECT="mgk_64_k66"
           export MODE="user"
           
-          # اجرای اسکریپت اصلی بیلد سامسونگ
+          # ساخت فایل کانفیگ
+          python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
+            --kernel-defconfig mediatek-bazel_defconfig \
+            --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
+            --kernel-build-config-overlays "" \
+            -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
+          
+          # اجرای اسکریپت اصلی بیلد سامسونگ (حالا همه ابزارها را در مسیر خودش می‌بیند)
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
 
