@@ -42,9 +42,14 @@ jobs:
           rm -rf kernel/prebuilts/jdk/jdk11
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/jdk/jdk11 kernel/prebuilts/jdk/jdk11
 
-          # دانلود ابزارهای بیلد از پیش کامپایل شده (sysroot) برای جلوگیری از ارور empty glob
+          # دانلود ابزارهای بیلد از پیش کامپایل شده (sysroot)
           rm -rf kernel/prebuilts/build-tools
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/build-tools kernel/prebuilts/build-tools
+          
+          # کپی کردن ابزارها در مسیری که بیزل دقیقاً در آنجا به دنبالشان می‌گردد
+          rm -rf kernel/build/kernel/build-tools
+          cp -r kernel/prebuilts/build-tools kernel/build/kernel/build-tools
+
 
       - name: Build with Samsung Script
         run: |
