@@ -1,4 +1,4 @@
-۴name: Build Kernel A145P
+name: Build Kernel A145P
 
 on:
   push:
