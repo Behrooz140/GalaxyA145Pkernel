@@ -42,7 +42,9 @@ jobs:
           git checkout android-14.0.0_r1
           cd ../../..
           
+          mkdir -p kernel/build/bazel_common_rules/exec/impl
           touch kernel/build/bazel_common_rules/exec/BUILD.bazel
+          touch kernel/build/bazel_common_rules/exec/impl/BUILD.bazel
 
       - name: Build with Samsung Script
         run: |
