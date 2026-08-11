@@ -23,9 +23,13 @@ jobs:
           mkdir -p kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/
           ln -s $(which bazel) kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel
           
-          # پاکسازی فایل‌های خالی مرحله قبل و دانلود رسمی کامپایلر Clang از گوگل
+          # پاکسازی فایل‌های خالی و دانلود رسمی کامپایلر Clang از گوگل
           rm -rf kernel/prebuilts/clang/host/linux-x86
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 kernel/prebuilts/clang/host/linux-x86
+          
+          # ایجاد مسیر و دانلود کتابخانه استاندارد Bazel
+          mkdir -p kernel/external
+          git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
 
       - name: Build with Samsung Script
         run: |
