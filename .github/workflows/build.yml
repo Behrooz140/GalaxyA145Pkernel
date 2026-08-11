@@ -32,8 +32,7 @@ jobs:
           mkdir -p kernel/external
           git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
           
-          # ایجاد فایل‌های BUILD جا افتاده در سورس سامسونگ
-          mkdir -p kernel/build/bazel_common_rules/dist
+          # ایجاد فایل‌های BUILD (بدون دستور ساخت پوشه، چون مسیر وجود دارد)
           touch kernel/build/bazel_common_rules/dist/BUILD.bazel
           touch kernel/build/bazel_common_rules/BUILD.bazel
 
