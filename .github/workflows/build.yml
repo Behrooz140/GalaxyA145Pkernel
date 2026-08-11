@@ -31,6 +31,11 @@ jobs:
           rm -rf kernel/external/bazel-skylib
           mkdir -p kernel/external
           git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
+          
+          # ایجاد فایل‌های BUILD جا افتاده در سورس سامسونگ
+          mkdir -p kernel/build/bazel_common_rules/dist
+          touch kernel/build/bazel_common_rules/dist/BUILD.bazel
+          touch kernel/build/bazel_common_rules/BUILD.bazel
 
       - name: Build with Samsung Script
         run: |
