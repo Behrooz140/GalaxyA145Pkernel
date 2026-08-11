@@ -15,10 +15,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs
           
-          # ساخت مسیر پیش‌نیازها و لینک کردن پایتون سرور
-          mkdir -p kernel/prebuilts/build-tools/path/linux-x86/
-          ln -s /usr/bin/python3 kernel/prebuilts/build-tools/path/linux-x86/python3
-          
           # ساخت مسیر و لینک کردن ابزار کامپایلر Bazel
           mkdir -p kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/
           ln -s $(which bazel) kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel
