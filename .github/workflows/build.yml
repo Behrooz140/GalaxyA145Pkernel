@@ -23,10 +23,9 @@ jobs:
           mkdir -p kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/
           ln -s $(which bazel) kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel
 
-
-
       - name: Build with Samsung Script
         run: |
+          export USE_BAZEL_VERSION=6.4.0
           chmod +x build_kernel.sh
           ./build_kernel.sh
 
