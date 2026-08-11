@@ -45,6 +45,10 @@ jobs:
           # ورود به پوشه کرنل طبق راهنمای سازنده
           cd kernel
           
+          # لینک کردن پایتونِ سیستم به مسیر ایزوله‌ای که بیزل به دنبال آن می‌گردد
+          mkdir -p prebuilts/build-tools/path/linux-x86/
+          ln -sf /usr/bin/python3 prebuilts/build-tools/path/linux-x86/python3
+          
           # ساخت فایل کانفیگ دقیقاً با آرگومان‌های مدیاتک/سامسونگ
           python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
             --kernel-defconfig mediatek-bazel_defconfig \
