@@ -1,0 +1,27 @@
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Set up Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip
+
+      - name: Build with Samsung Script
+        run: |
+          chmod +x build_kernel.sh
+          ./build_kernel.sh
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: A145P-Kernel-Output
+          path: out/target/product/a14m/obj/KLEAF_OBJ/dist/*
