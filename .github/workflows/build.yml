@@ -40,6 +40,8 @@ jobs:
           cp -r aosp_toolchain/prebuilts ./
           cp -r aosp_toolchain/tools ./
 
+      - name: Build with Samsung Script
+        run: |
           # ورود به پوشه کرنل طبق راهنمای سازنده
           cd kernel
           
@@ -58,7 +60,8 @@ jobs:
             --kernel-build-config-overlays "" \
             -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
           
-          # اعمال متغیرهای محیطی ضروری برای کامپایل
+          # اعمال متغیرهای محیطی ضروری برای کامپایل (قفل کردن نسخه بیزل)
+          export USE_BAZEL_VERSION=6.4.0
           export DEVICE_MODULES_DIR="kernel_device_modules-6.6"
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
           export OUT_DIR="../out/target/product/a14m/obj/KLEAF_OBJ"
@@ -70,6 +73,7 @@ jobs:
           # اجرای اسکریپت اصلی بیلد سامسونگ
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
+
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
