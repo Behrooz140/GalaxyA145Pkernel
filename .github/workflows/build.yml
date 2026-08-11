@@ -27,22 +27,22 @@ jobs:
           git config --global user.name "Behrooz140"
           git config --global user.email "behrooz140@local.dev"
           
-          # دانلود یکپارچه تمام ابزارهای بیلد از مخازن اندروید ۱۵ گوگل
+          # دانلود یکپارچه تمام ابزارهای بیلد از مخازن گوگل
           mkdir aosp_toolchain
           cd aosp_toolchain
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android15-6.6 --depth=1
           repo sync -c -j$(nproc) --no-clone-bundle --no-tags
           
-          # انتقال ابزارها به داخل مسیر kernel با چشم‌پوشی از فایل‌های مخفی گیت
+          # کپی ابزارها به ریشه (Root) مخزن، دقیقاً در کنار پوشه kernel (نه داخل آن)
           cd ..
-          rsync -a --ignore-existing --exclude=".git" --exclude=".repo" aosp_toolchain/build/ kernel/build/
-          rsync -a --ignore-existing --exclude=".git" --exclude=".repo" aosp_toolchain/external/ kernel/external/
-          rsync -a --ignore-existing --exclude=".git" --exclude=".repo" aosp_toolchain/prebuilts/ kernel/prebuilts/
-          rsync -a --ignore-existing --exclude=".git" --exclude=".repo" aosp_toolchain/tools/ kernel/tools/
+          rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/build/ ./build/
+          rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/external/ ./external/
+          rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/prebuilts/ ./prebuilts/
+          rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/tools/ ./tools/
 
       - name: Build with Samsung Script
         run: |
-          # ورود به پوشه کرنل
+          # ورود به پوشه کرنل برای اجرای بیلد
           cd kernel
           
           # قفل کردن نسخه بیزل و اعمال متغیرهای محیطی ضروری
@@ -62,10 +62,9 @@ jobs:
             --kernel-build-config-overlays "" \
             -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
           
-          # اجرای اسکریپت اصلی بیلد سامسونگ (حالا همه ابزارها را در مسیر خودش می‌بیند)
+          # اجرای اسکریپت اصلی بیلد سامسونگ
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
-
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
