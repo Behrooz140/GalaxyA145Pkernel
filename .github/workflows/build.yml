@@ -1,3 +1,5 @@
+name: Build Kernel A145P
+
 on:
   push:
     branches: [ "main" ]
@@ -7,51 +9,61 @@ jobs:
   build-kernel:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
+      - name: Checkout Samsung Kernel Source
         uses: actions/checkout@v4
 
-      - name: Set up Environment
+      - name: Set up Environment & Sync AOSP Toolchains
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs
+          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs python-is-python3
           
-          # 1. دانلود کامپایلر Clang
-          rm -rf kernel/prebuilts/clang/host/linux-x86
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 kernel/prebuilts/clang/host/linux-x86
+          # نصب ابزار repo گوگل برای دانلود یکپارچه محیط بیلد
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          export PATH="~/bin:$PATH"
           
-          # 2. دانلود Bazel Skylib
-          rm -rf kernel/external/bazel-skylib
-          mkdir -p kernel/external
-          git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
+          # تنظیمات ضروری گیت برای جلوگیری از ارور ابزار repo
+          git config --global user.name "Behrooz140"
+          git config --global user.email "behrooz140@local.dev"
           
-          # 3. دانلود قوانین پایه بیزل (تلاش برای شاخه مخصوص کرنل 6.6 اندروید 15 یا شاخه اصلی)
-          rm -rf kernel/build/bazel_common_rules
-          git clone -b common-android15-6.6 --depth=1 https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules || git clone --depth=1 https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules
+          # دانلود یکپارچه تمام ابزارهای بیلد از گوگل (شاخه اندروید ۱۵ - کرنل ۶.۶)
+          mkdir aosp_toolchain
+          cd aosp_toolchain
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android15-6.6 --depth=1
+          repo sync -c -j$(nproc) --no-clone-bundle --no-tags
           
-          # 4. دانلود JDK 11
-          rm -rf kernel/prebuilts/jdk/jdk11
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/jdk/jdk11 kernel/prebuilts/jdk/jdk11
-          
-          # 5. ساخت مسیر فیزیکی sysroot و تزریق فایل برای عبور قطعی از ارور empty glob
-          mkdir -p kernel/build/kernel/build-tools/sysroot
-          touch kernel/build/kernel/build-tools/sysroot/.keep
-          
-          # 6. لینک کردن مسیر اجرایی بیزل
-          mkdir -p kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/
-          ln -sf $(which bazel) kernel/prebuilts/kernel-build-tools/bazel/linux-x86_64/bazel
-          
-          # 7. ایجاد فایل پایه بیلد
-          touch kernel/build/BUILD.bazel
-          
-          # 8. جراحی فایل بیلد مدیاتک/سامسونگ و تزریق تارگت‌های فراموش شده
-          echo 'toolchain_type(name = "hermetic_tools_toolchain_type")' >> kernel/build/kernel/BUILD.bazel
-          echo 'toolchain_type(name = "hermetic_tools_toolchain")' >> kernel/build/kernel/BUILD.bazel
+          # کپی دقیق ۴ پوشه حیاتی به روت سورس سامسونگ (طبق دستورالعمل README)
+          cd ..
+          cp -r aosp_toolchain/build ./
+          cp -r aosp_toolchain/external ./
+          cp -r aosp_toolchain/prebuilts ./
+          cp -r aosp_toolchain/tools ./
 
       - name: Build with Samsung Script
         run: |
-          export USE_BAZEL_VERSION=6.4.0
-          chmod +x build_kernel.sh
-          ./build_kernel.sh
+          # ورود به پوشه کرنل طبق راهنمای سازنده
+          cd kernel
+          
+          # ساخت فایل کانفیگ دقیقاً با آرگومان‌های مدیاتک/سامسونگ
+          python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
+            --kernel-defconfig mediatek-bazel_defconfig \
+            --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
+            --kernel-build-config-overlays "" \
+            -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
+          
+          # اعمال متغیرهای محیطی ضروری برای کامپایل
+          export DEVICE_MODULES_DIR="kernel_device_modules-6.6"
+          export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
+          export OUT_DIR="../out/target/product/a14m/obj/KLEAF_OBJ"
+          export DIST_DIR="../out/target/product/a14m/obj/KLEAF_OBJ/dist"
+          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config"
+          export PROJECT="mgk_64_k66"
+          export MODE="user"
+          
+          # اجرای اسکریپت اصلی بیلد سامسونگ
+          chmod +x ./kernel_device_modules-6.6/build.sh
+          ./kernel_device_modules-6.6/build.sh
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
