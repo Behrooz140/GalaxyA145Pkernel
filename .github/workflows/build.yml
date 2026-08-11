@@ -32,18 +32,12 @@ jobs:
           mkdir -p kernel/external
           git clone --depth=1 https://github.com/bazelbuild/bazel-skylib.git kernel/external/bazel-skylib
           
-          # ایجاد فایل BUILD در پوشه والد
+          # ایجاد فایل BUILD در پوشه والد برای رفع ارور پکیج بیزل
           touch kernel/build/BUILD.bazel
 
-          # حذف فایل یا لینک مزاحم برای باز شدن مسیر ساخت پوشه
+          # کلون کردن سورس کامل bazel_common_rules مستقیما از گوگل
           rm -rf kernel/build/bazel_common_rules
-
-          # ساخت مسیر پوشه‌های قوانین بیزل
-          mkdir -p kernel/build/bazel_common_rules/dist
-
-          # ایجاد فایل‌های مورد نیاز سیستم کامپایل
-          touch kernel/build/bazel_common_rules/dist/BUILD.bazel
-          touch kernel/build/bazel_common_rules/BUILD.bazel
+          git clone --depth=1 https://android.googlesource.com/platform/build/bazel_common_rules kernel/build/bazel_common_rules
 
       - name: Build with Samsung Script
         run: |
