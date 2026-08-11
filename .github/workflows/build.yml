@@ -45,10 +45,13 @@ jobs:
           # ورود به پوشه کرنل طبق راهنمای سازنده
           cd kernel
           
-          # ساخت فایل بیلد خالی برای شناساندن پکیج کامپایلر به سیستم بیزل
-          mkdir -p prebuilts/clang/host/linux-x86/kleaf
+          # دانلود فایل‌های واقعی Kleaf برای کامپایلر Clang
+          rm -rf prebuilts/clang/host/linux-x86/kleaf
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 /tmp/clang
+          cp -r /tmp/clang/kleaf prebuilts/clang/host/linux-x86/
+          
+          # ساخت فایل بیلد خالی در روت Clang فقط برای شناساندن پکیج والد
           touch prebuilts/clang/host/linux-x86/BUILD.bazel
-          touch prebuilts/clang/host/linux-x86/kleaf/BUILD.bazel
           
           # لینک کردن پایتونِ سیستم به مسیر ایزوله‌ای که بیزل به دنبال آن می‌گردد
           mkdir -p prebuilts/build-tools/path/linux-x86/
@@ -78,6 +81,7 @@ jobs:
           # اجرای اسکریپت اصلی بیلد سامسونگ
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
+
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
