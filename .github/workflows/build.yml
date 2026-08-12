@@ -43,7 +43,7 @@ jobs:
       - name: Setup KernelSU
         run: |
           # ورود به پوشه سورس اصلی کرنل
-          cd kernel/kernel_device_modules-6.6
+          cd kernel-6.6
           # دریافت و تزریق خودکار کدهای KernelSU به سورس لینوکس
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
