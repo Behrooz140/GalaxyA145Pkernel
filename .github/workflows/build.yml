@@ -42,11 +42,13 @@ jobs:
 
       - name: Setup KernelSU
         run: |
-          cd kernel-6.6
+          cd kernel/kernel-6.6
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # تزریق دستی شماره نسخه برای جلوگیری از خطای نسخه 16 در محیط قرنطینه بیزل
-          sed -i '1s/^/KSU_VERSION := 32525\n/' drivers/kernelsu/Makefile
+          # دور زدن قطعی شرط‌های فایل Makefile و هاردکد کردن پرچم‌های کامپایلر
+          sed -i 's/KSU_VERSION := 16/KSU_VERSION := 32525/g' drivers/kernelsu/Makefile
+          sed -i 's/KSU_VERSION=16/KSU_VERSION=32525/g' drivers/kernelsu/Makefile
+          sed -i 's/-DKSU_VERSION=$(KSU_VERSION)/-DKSU_VERSION=32525/g' drivers/kernelsu/Makefile
 
       - name: Build with Samsung Script
         run: |
