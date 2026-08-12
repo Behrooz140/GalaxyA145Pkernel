@@ -45,10 +45,10 @@ jobs:
           cd kernel/kernel-6.6
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # دور زدن قطعی شرط‌های فایل Makefile و هاردکد کردن پرچم‌های کامپایلر
-          sed -i 's/KSU_VERSION := 16/KSU_VERSION := 32525/g' drivers/kernelsu/Makefile
-          sed -i 's/KSU_VERSION=16/KSU_VERSION=32525/g' drivers/kernelsu/Makefile
-          sed -i 's/-DKSU_VERSION=$(KSU_VERSION)/-DKSU_VERSION=32525/g' drivers/kernelsu/Makefile
+          # نفوذ مستقیم به فایل‌های سورس زبان C و تزریق اجباری شماره نسخه
+          for file in drivers/kernelsu/*.c; do
+              sed -i '1i #undef KSU_VERSION\n#define KSU_VERSION 32525' "$file"
+          done
 
       - name: Build with Samsung Script
         run: |
