@@ -42,10 +42,11 @@ jobs:
 
       - name: Setup KernelSU
         run: |
-          # ورود به پوشه سورس اصلی کرنل
           cd kernel-6.6
-          # دریافت و تزریق خودکار کدهای KernelSU به سورس لینوکس
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+          
+          # تزریق دستی شماره نسخه برای جلوگیری از خطای نسخه 16 در محیط قرنطینه بیزل
+          sed -i '1s/^/KSU_VERSION := 32525\n/' drivers/kernelsu/Makefile
 
       - name: Build with Samsung Script
         run: |
