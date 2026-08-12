@@ -42,13 +42,11 @@ jobs:
 
       - name: Setup KernelSU
         run: |
-          cd kernel/kernel-6.6
+          cd kernel-6.6
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # نفوذ مستقیم به فایل‌های سورس زبان C و تزریق اجباری شماره نسخه
-          for file in drivers/kernelsu/*.c; do
-              sed -i '1i #undef KSU_VERSION\n#define KSU_VERSION 32525' "$file"
-          done
+          # نفوذ قطعی به فایل هدر اصلی سورس و تزریق سخت‌افزاری نسخه
+          sed -i '1s/^/#undef KSU_VERSION\n#define KSU_VERSION 32525\n/' KernelSU/kernel/ksu.h
 
       - name: Build with Samsung Script
         run: |
