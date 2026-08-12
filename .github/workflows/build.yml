@@ -45,8 +45,8 @@ jobs:
           cd kernel-6.6
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # نفوذ قطعی به فایل هدر اصلی سورس و تزریق سخت‌افزاری نسخه
-          sed -i '1s/^/#undef KSU_VERSION\n#define KSU_VERSION 32525\n/' KernelSU/kernel/ksu.h
+          # جستجوی سراسری و تزریق هوشمند نسخه در تمام فایل‌های سورس KernelSU
+          find KernelSU -type f -name "*.c" -exec sed -i '1i #undef KSU_VERSION\n#define KSU_VERSION 32525' {} +
 
       - name: Build with Samsung Script
         run: |
