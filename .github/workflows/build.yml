@@ -44,6 +44,7 @@ jobs:
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/prebuilts/ kernel/prebuilts/
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/tools/ kernel/tools/
 
+
       - name: Apply Droidspaces GKI Patches & Configs
         run: |
           set -e
@@ -104,6 +105,7 @@ jobs:
           grep -E "CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|PID_NS|DEVTMPFS|USER_NS|NETFILTER_XT_MATCH_ADDRTYPE)=" "$GKI_DEFCONFIG" || true
           
           cd ..
+
 
       - name: Setup KernelSU
         run: |
