@@ -17,10 +17,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs python-is-python3 rsync
           
-          mkdir -p ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
-          export PATH="~/bin:$PATH"
+          mkdir -p \~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > \~/bin/repo
+          chmod a+x \~/bin/repo
+          export PATH="\~/bin:$PATH"
           
           git config --global user.name "Behrooz140"
           git config --global user.email "behrooz140@local.dev"
@@ -40,104 +40,66 @@ jobs:
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/prebuilts/ kernel/prebuilts/
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/tools/ kernel/tools/
 
-
-      - name: Diagnose A145P Kernel Build Tree
+      - name: Apply Droidspaces GKI Patches & Configs
         run: |
           set -e
-
-          echo "========================================"
-          echo " A145P KERNEL TREE DIAGNOSTIC"
-          echo "========================================"
-
-          echo
-          echo "===== ROOT ====="
-          pwd
-          ls -lah
-
-          echo
-          echo "===== TOP LEVEL DIRECTORIES ====="
-          find . -maxdepth 2 -type d | sort
-
-          echo
-          echo "===== KERNEL-6.6 ====="
-          ls -lah kernel-6.6 || true
-
-          echo
-          echo "===== KERNEL BUILD TREE ====="
-          ls -lah kernel || true
-
-          echo
-          echo "===== DEFCONFIG FILES ====="
-          find kernel-6.6 \
-            -type f \
-            \( \
-              -name "mediatek-bazel_defconfig" \
-              -o -name "gki_defconfig" \
-              -o -name "mt6768_overlay.config" \
-              -o -name "o22.config" \
-            \) \
-            -print
-
-          echo
-          echo "===== ALL BUILD CONFIG FILES ====="
-          find . \
-            -type f \
-            \( \
-              -name "build.config" \
-              -o -name "build.config.*" \
-            \) \
-            -print | sort
-
-          echo
-          echo "===== BUILD SCRIPTS ====="
-          find . \
-            -type f \
-            \( \
-              -name "build.sh" \
-              -o -name "build_kernel.sh" \
-              -o -name "gen_build_config.py" \
-            \) \
-            -print | sort
-
-          echo
-          echo "===== KERNEL VERSION ====="
-          if [ -f kernel-6.6/Makefile ]; then
-            head -30 kernel-6.6/Makefile
+          
+          echo "=== Downloading Droidspaces kABI patch for kernel 6.6 ==="
+          mkdir -p droidspaces-patches
+          curl -L -o droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch \
+            "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
+          
+          echo "=== Applying patch to kernel-6.6 ==="
+          cd kernel-6.6
+          
+          if patch -p1 --dry-run < ../droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch > /dev/null 2>&1; then
+            patch -p1 < ../droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
+            echo "Patch applied successfully"
+          else
+            echo "WARNING: Patch may already be applied or have conflict. Trying with -N ..."
+            patch -p1 -N < ../droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch || true
           fi
-
-          echo
-          echo "===== CONFIG REFERENCES ====="
-
-          grep -RniE \
-            "mediatek-bazel_defconfig|gki_defconfig|mt6768_overlay|o22.config|DEFCONFIG_OVERLAYS|kernel-defconfig" \
-            kernel \
-            kernel-6.6 \
-            --exclude-dir=.git \
-            --exclude='*.o' \
-            --exclude='*.a' \
-            2>/dev/null \
-            | head -300 || true
-
-          echo
-          echo "===== KLEAF BUILD SCRIPT ====="
-
-          if [ -f kernel/kernel_device_modules-6.6/build.sh ]; then
-            sed -n '1,260p' \
-              kernel/kernel_device_modules-6.6/build.sh
-          fi
-
-          echo
-          echo "===== GEN BUILD CONFIG ====="
-
-          if [ -f kernel/kernel_device_modules-6.6/scripts/gen_build_config.py ]; then
-            sed -n '1,320p' \
-              kernel/kernel_device_modules-6.6/scripts/gen_build_config.py
-          fi
-
-          echo
-          echo "===== DONE ====="
-
-
+          
+          echo "=== Enabling Droidspaces configs in gki_defconfig ==="
+          GKI_DEFCONFIG="arch/arm64/configs/gki_defconfig"
+          
+          enable_config() {
+            local opt="$1"
+            if grep -q "# ${opt} is not set" "$GKI_DEFCONFIG"; then
+              sed -i "s/# \( {opt} is not set/ \){opt}=y/" "$GKI_DEFCONFIG"
+              echo "  Enabled: $opt (was not set)"
+            elif grep -q "^${opt}=y" "$GKI_DEFCONFIG"; then
+              echo "  Already enabled: $opt"
+            else
+              echo "${opt}=y" >> "$GKI_DEFCONFIG"
+              echo "  Appended: $opt"
+            fi
+          }
+          
+          # کانفیگ‌های اجباری
+          enable_config CONFIG_SYSVIPC
+          enable_config CONFIG_POSIX_MQUEUE
+          enable_config CONFIG_IPC_NS
+          enable_config CONFIG_PID_NS
+          enable_config CONFIG_DEVTMPFS
+          enable_config CONFIG_NETFILTER_XT_MATCH_ADDRTYPE
+          
+          # اختیاری ولی توصیه‌شده
+          enable_config CONFIG_USER_NS
+          enable_config CONFIG_NETFILTER_XT_TARGET_REJECT
+          enable_config CONFIG_NETFILTER_XT_TARGET_LOG
+          enable_config CONFIG_NETFILTER_XT_MATCH_RECENT
+          enable_config CONFIG_IP_SET
+          enable_config CONFIG_IP_SET_HASH_IP
+          enable_config CONFIG_IP_SET_HASH_NET
+          enable_config CONFIG_NETFILTER_XT_SET
+          enable_config CONFIG_TMPFS_POSIX_ACL
+          enable_config CONFIG_TMPFS_XATTR
+          
+          echo "=== Done. Current relevant configs: ==="
+          grep -E "CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|PID_NS|DEVTMPFS|USER_NS|NETFILTER_XT_MATCH_ADDRTYPE)=" "$GKI_DEFCONFIG" || true
+          
+          cd ..
 
       - name: Setup KernelSU
         run: |
