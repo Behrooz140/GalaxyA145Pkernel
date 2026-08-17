@@ -17,10 +17,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs python-is-python3 rsync
           
-          mkdir -p \~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > \~/bin/repo
-          chmod a+x \~/bin/repo
-          export PATH="\~/bin:$PATH"
+          mkdir -p $HOME/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > $HOME/bin/repo
+          chmod a+x $HOME/bin/repo
+          export PATH="$HOME/bin:$PATH"
+          
+          # چک کردن که repo کار می‌کنه
+          which repo
+          repo --version
           
           git config --global user.name "Behrooz140"
           git config --global user.email "behrooz140@local.dev"
