@@ -48,39 +48,6 @@ jobs:
           # جستجوی سراسری و تزریق هوشمند نسخه در تمام فایل‌های سورس KernelSU
           find KernelSU -type f -name "*.c" -exec sed -i '1i #undef KSU_VERSION\n#define KSU_VERSION 32525' {} +
 
-
-      - name: Optimize Kernel Config (Disable Unnecessary Options)
-        run: |
-          echo "=== Adding optimizations to o22.config ==="
-    
-          O22_CONFIG=$(find kernel -name "o22.config" | head -1)
-    
-          if [ -f "$O22_CONFIG" ]; then
-          cat >> "$O22_CONFIG" << 'EOF'
-    
-          #============================================
-          # بهینه‌سازی‌ها - غیرفعال‌سازی گزینه‌های غیرضروری       #============================================
-          # CONFIG_DEBUG_INFO_BTF is not set
-          # CONFIG_KASAN_HW_TAGS is not set
-          # CONFIG_UBSAN is not set
-          # CONFIG_SCHED_DEBUG is not set
-          # CONFIG_SCHEDSTATS is not set
-          # CONFIG_HIST_TRIGGERS is not set
-          # CONFIG_FTRACE is not set
-          # CONFIG_CORESIGHT is not set
-          # CONFIG_MTK_AEE_FEATURE is not set
-          # CONFIG_MTK_AEE_AED is not set
-          # CONFIG_MTK_AEE_HANGDET is not set
-          # CONFIG_MTK_AEE_IPANIC is not set
-          # CONFIG_MTK_HANG_DETECT is not set
-          EOF
-      
-          echo "=== Optimizations added to o22.config ==="
-          else
-          echo "ERROR: o22.config not found!"
-          exit 1
-          fi
-
       - name: Build with Samsung Script
         run: |
           # ورود به پوشه کرنل برای اجرای بیلد
