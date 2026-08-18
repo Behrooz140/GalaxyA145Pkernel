@@ -56,7 +56,7 @@ jobs:
           O22_CONFIG=$(find kernel -name "o22.config" | head -1)
     
           if [ -f "$O22_CONFIG" ]; then
-      cat >> "$O22_CONFIG" << 'EOF'
+          cat >> "$O22_CONFIG" << 'EOF'
     
           #============================================
           # بهینه‌سازی‌ها - غیرفعال‌سازی گزینه‌های غیرضروری       #============================================
@@ -76,10 +76,10 @@ jobs:
           EOF
       
           echo "=== Optimizations added to o22.config ==="
-    else
+          else
           echo "ERROR: o22.config not found!"
           exit 1
-        fi
+          fi
 
       - name: Build with Samsung Script
         run: |
