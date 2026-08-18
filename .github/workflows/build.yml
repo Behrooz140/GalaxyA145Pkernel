@@ -17,14 +17,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs python-is-python3 rsync
           
-          mkdir -p $HOME/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > $HOME/bin/repo
-          chmod a+x $HOME/bin/repo
-          export PATH="$HOME/bin:$PATH"
-          
-          # چک کردن که repo کار می‌کنه
-          which repo
-          repo --version
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          export PATH="~/bin:$PATH"
           
           git config --global user.name "Behrooz140"
           git config --global user.email "behrooz140@local.dev"
@@ -35,100 +31,112 @@ jobs:
           repo sync -c -j$(nproc) --no-clone-bundle --no-tags
           
           cd ..
-          # ساخت پوشه‌ها برای اطمینان از عدم خطای rsync
           mkdir -p kernel/build kernel/external kernel/prebuilts kernel/tools
           
-          # انتقال ابزارها دقیقاً به داخل پوشه kernel (جایی که بیزل به دنبال آن‌هاست)
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/build/ kernel/build/
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/external/ kernel/external/
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/prebuilts/ kernel/prebuilts/
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/tools/ kernel/tools/
 
-
-      - name: Apply Droidspaces GKI Patches & Configs
-        run: |
-          set -e
-          
-          echo "=== Downloading Droidspaces kABI patch for kernel 6.6 ==="
-          mkdir -p droidspaces-patches
-          curl -L -o droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch \
-            "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
-          
-          echo "=== Applying patch to kernel-6.6 ==="
-          cd kernel-6.6
-          
-          patch -p1 -N < ../droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch || true
-          echo "Patch step finished"
-          
-          echo "=== Enabling Droidspaces configs in gki_defconfig ==="
-          GKI_DEFCONFIG="arch/arm64/configs/gki_defconfig"
-          
-          # روش ساده و بدون sed پیچیده
-          for opt in \
-            CONFIG_SYSVIPC \
-            CONFIG_POSIX_MQUEUE \
-            CONFIG_IPC_NS \
-            CONFIG_PID_NS \
-            CONFIG_DEVTMPFS \
-            CONFIG_NETFILTER_XT_MATCH_ADDRTYPE \
-            CONFIG_USER_NS \
-            CONFIG_NETFILTER_XT_TARGET_REJECT \
-            CONFIG_NETFILTER_XT_TARGET_LOG \
-            CONFIG_NETFILTER_XT_MATCH_RECENT \
-            CONFIG_IP_SET \
-            CONFIG_IP_SET_HASH_IP \
-            CONFIG_IP_SET_HASH_NET \
-            CONFIG_NETFILTER_XT_SET \
-            CONFIG_TMPFS_POSIX_ACL \
-            CONFIG_TMPFS_XATTR
-          do
-            if grep -q "^${opt}=y" "$GKI_DEFCONFIG"; then
-              echo "  Already enabled: $opt"
-            else
-              # حذف خط قبلی اگر وجود داشته باشه (is not set)
-              sed -i "/# ${opt} is not set/d" "$GKI_DEFCONFIG"
-              echo "${opt}=y" >> "$GKI_DEFCONFIG"
-              echo "  Added: $opt"
-            fi
-          done
-          
-          echo "=== Done. Current relevant configs: ==="
-          grep -E "CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|PID_NS|DEVTMPFS|USER_NS|NETFILTER_XT_MATCH_ADDRTYPE)=" "$GKI_DEFCONFIG" || true
-          
-          cd ..
-
-
       - name: Setup KernelSU
         run: |
           cd kernel-6.6
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          
-          # جستجوی سراسری و تزریق هوشمند نسخه در تمام فایل‌های سورس KernelSU
           find KernelSU -type f -name "*.c" -exec sed -i '1i #undef KSU_VERSION\n#define KSU_VERSION 32525' {} +
+
+      - name: Optimize Kernel Config (Disable Unnecessary Options)
+        run: |
+          echo "=== Creating optimization overlay ==="
+          cat > kernel/kernel_device_modules-6.6/optimize_overlay.config << 'EOF'
+          # ============================================================
+          # غیرفعال‌سازی گزینه‌های غیرضروری برای بهینه‌سازی
+          # ============================================================
+          
+          # دیباگ‌های سنگین
+          # CONFIG_DEBUG_INFO_BTF is not set
+          # CONFIG_KASAN_HW_TAGS is not set
+          # CONFIG_UBSAN is not set
+          # CONFIG_SCHED_DEBUG is not set
+          # CONFIG_SCHEDSTATS is not set
+          # CONFIG_HIST_TRIGGERS is not set
+          # CONFIG_FTRACE is not set
+          # CONFIG_CORESIGHT is not set
+          # CONFIG_MTK_AEE_FEATURE is not set
+          # CONFIG_MTK_AEE_AED is not set
+          # CONFIG_MTK_AEE_HANGDET is not set
+          # CONFIG_MTK_AEE_IPANIC is not set
+          # CONFIG_MTK_HANG_DETECT is not set
+          
+          # دیباگ‌های سخت‌افزاری
+          # CONFIG_SCSI_UFS_MEDIATEK_DBG is not set
+          # CONFIG_HPB_DEBUG is not set
+          # CONFIG_HPB_DEBUG_SYSFS is not set
+          # CONFIG_UFSHID_DEBUG is not set
+          # CONFIG_MTK_IOMMU_MISC_DBG is not set
+          # CONFIG_MTK_IOMMU_MISC_TEST is not set
+          # CONFIG_MTK_MMDEBUG is not set
+          # CONFIG_MTK_MMINFRA is not set
+          # CONFIG_MTK_DRAM_LOG_STORE is not set
+          # CONFIG_MTK_IRQ_DBG is not set
+          # CONFIG_MTK_BUS_PARITY_CHECK is not set
+          # CONFIG_MTK_CACHE_PARITY_CHECK is not set
+          # CONFIG_MTK_GIC_RAM_PARITY_CHECK is not set
+          # CONFIG_MTK_SYSTRACKER_WATCHPOINT is not set
+          # CONFIG_MTK_LAST_BUS is not set
+          # CONFIG_MTK_DBGTOP is not set
+          # CONFIG_SUBPMIC_DBG is not set
+          # CONFIG_MT6370_DBG is not set
+          
+          # پلتفرم‌های غیرضروری
+          # CONFIG_ARCH_ACTIONS is not set
+          # CONFIG_ARCH_APPLE is not set
+          # CONFIG_ARCH_BCM is not set
+          # CONFIG_ARCH_EXYNOS is not set
+          # CONFIG_ARCH_MESON is not set
+          # CONFIG_ARCH_ROCKCHIP is not set
+          # CONFIG_ARCH_RENESAS is not set
+          # CONFIG_XEN is not set
+          # CONFIG_NUMA is not set
+          # CONFIG_ACPI is not set
+          
+          # ویژگی‌های سیستمی غیرضروری
+          # CONFIG_SYSVIPC is not set
+          # CONFIG_POSIX_MQUEUE is not set
+          # CONFIG_USER_NS is not set
+          # CONFIG_PID_NS is not set
+          # CONFIG_FHANDLE is not set
+          # CONFIG_RSEQ is not set
+          # CONFIG_KSM is not set
+          # CONFIG_MEMORY_FAILURE is not set
+          # CONFIG_DEVTMPFS is not set
+          # CONFIG_VT is not set
+          # CONFIG_LEGACY_PTYS is not set
+          # CONFIG_DEVMEM is not set
+          # CONFIG_DEVPORT is not set
+          # CONFIG_HWMON is not set
+          # CONFIG_DNOTIFY is not set
+          EOF
+          echo "=== Optimization overlay created ==="
 
       - name: Build with Samsung Script
         run: |
-          # ورود به پوشه کرنل برای اجرای بیلد
           cd kernel
           
-          # قفل کردن نسخه بیزل و اعمال متغیرهای محیطی ضروری
           export USE_BAZEL_VERSION=6.4.0
           export DEVICE_MODULES_DIR="kernel_device_modules-6.6"
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
           export OUT_DIR="../out/target/product/a14m/obj/KLEAF_OBJ"
           export DIST_DIR="../out/target/product/a14m/obj/KLEAF_OBJ/dist"
-          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config"
+          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config optimize_overlay.config"
           export PROJECT="mgk_64_k66"
           export MODE="user"
           
-          # ساخت فایل کانفیگ
           python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
             --kernel-defconfig mediatek-bazel_defconfig \
-            --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
+            --kernel-defconfig-overlays "mt6768_overlay.config o22.config optimize_overlay.config" \
             --kernel-build-config-overlays "" \
             -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
           
-          # اجرای اسکریپت اصلی بیلد سامسونگ
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
 
