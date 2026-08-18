@@ -53,20 +53,20 @@ jobs:
           O22_CONFIG=$(find kernel -name "o22.config" | head -1)
           if [ -f "$O22_CONFIG" ]; then
             cat >> "$O22_CONFIG" << 'EOF'
-            # CONFIG_DEBUG_INFO_BTF is not set
-            # CONFIG_KASAN_HW_TAGS is not set
-            # CONFIG_UBSAN is not set
-            # CONFIG_SCHED_DEBUG is not set
-            # CONFIG_SCHEDSTATS is not set
-            # CONFIG_HIST_TRIGGERS is not set
-            # CONFIG_FTRACE is not set
-            # CONFIG_CORESIGHT is not set
-            # CONFIG_MTK_AEE_FEATURE is not set
-            # CONFIG_MTK_AEE_AED is not set
-            # CONFIG_MTK_AEE_HANGDET is not set
-            # CONFIG_MTK_AEE_IPANIC is not set
-            # CONFIG_MTK_HANG_DETECT is not set
-            # CONFIG_IO_RECORD is not set
+              # CONFIG_DEBUG_INFO_BTF is not set
+              # CONFIG_KASAN_HW_TAGS is not set
+              # CONFIG_UBSAN is not set
+              # CONFIG_SCHED_DEBUG is not set
+              # CONFIG_SCHEDSTATS is not set
+              # CONFIG_HIST_TRIGGERS is not set
+              # CONFIG_FTRACE is not set
+              # CONFIG_CORESIGHT is not set
+              # CONFIG_MTK_AEE_FEATURE is not set
+              # CONFIG_MTK_AEE_AED is not set
+              # CONFIG_MTK_AEE_HANGDET is not set
+              # CONFIG_MTK_AEE_IPANIC is not set
+              # CONFIG_MTK_HANG_DETECT is not set
+              # CONFIG_IO_RECORD is not set
             EOF
           fi
 
