@@ -46,13 +46,18 @@ jobs:
 
       - name: Optimize Kernel Config (Disable Unnecessary Options)
         run: |
-          echo "=== Creating optimization overlay ==="
-          cat > kernel/kernel_device_modules-6.6/optimize_overlay.config << 'EOF'
-          # ============================================================
-          # غیرفعال‌سازی گزینه‌های غیرضروری برای بهینه‌سازی
-          # ============================================================
+          echo "=== Adding optimizations to o22.config ==="
           
-          # دیباگ‌های سنگین
+          # پیدا کردن فایل o22.config
+          O22_CONFIG=$(find kernel -name "o22.config" | head -1)
+          
+          if [ -f "$O22_CONFIG" ]; then
+            # اضافه کردن گزینه‌های غیرفعال به انتهای فایل
+            cat >> "$O22_CONFIG" << 'EOF'
+          
+          # ============================================================
+          # بهینه‌سازی‌ها - غیرفعال‌سازی گزینه‌های غیرضروری
+          # ============================================================
           # CONFIG_DEBUG_INFO_BTF is not set
           # CONFIG_KASAN_HW_TAGS is not set
           # CONFIG_UBSAN is not set
@@ -66,57 +71,28 @@ jobs:
           # CONFIG_MTK_AEE_HANGDET is not set
           # CONFIG_MTK_AEE_IPANIC is not set
           # CONFIG_MTK_HANG_DETECT is not set
-          
-          # دیباگ‌های سخت‌افزاری
-          # CONFIG_SCSI_UFS_MEDIATEK_DBG is not set
-          # CONFIG_HPB_DEBUG is not set
-          # CONFIG_HPB_DEBUG_SYSFS is not set
-          # CONFIG_UFSHID_DEBUG is not set
-          # CONFIG_MTK_IOMMU_MISC_DBG is not set
-          # CONFIG_MTK_IOMMU_MISC_TEST is not set
-          # CONFIG_MTK_MMDEBUG is not set
-          # CONFIG_MTK_MMINFRA is not set
-          # CONFIG_MTK_DRAM_LOG_STORE is not set
-          # CONFIG_MTK_IRQ_DBG is not set
-          # CONFIG_MTK_BUS_PARITY_CHECK is not set
-          # CONFIG_MTK_CACHE_PARITY_CHECK is not set
-          # CONFIG_MTK_GIC_RAM_PARITY_CHECK is not set
-          # CONFIG_MTK_SYSTRACKER_WATCHPOINT is not set
-          # CONFIG_MTK_LAST_BUS is not set
-          # CONFIG_MTK_DBGTOP is not set
-          # CONFIG_SUBPMIC_DBG is not set
-          # CONFIG_MT6370_DBG is not set
-          
-          # پلتفرم‌های غیرضروری
           # CONFIG_ARCH_ACTIONS is not set
           # CONFIG_ARCH_APPLE is not set
           # CONFIG_ARCH_BCM is not set
           # CONFIG_ARCH_EXYNOS is not set
           # CONFIG_ARCH_MESON is not set
           # CONFIG_ARCH_ROCKCHIP is not set
-          # CONFIG_ARCH_RENESAS is not set
           # CONFIG_XEN is not set
           # CONFIG_NUMA is not set
           # CONFIG_ACPI is not set
-          
-          # ویژگی‌های سیستمی غیرضروری
           # CONFIG_SYSVIPC is not set
           # CONFIG_POSIX_MQUEUE is not set
           # CONFIG_USER_NS is not set
           # CONFIG_PID_NS is not set
           # CONFIG_FHANDLE is not set
           # CONFIG_RSEQ is not set
-          # CONFIG_KSM is not set
-          # CONFIG_MEMORY_FAILURE is not set
-          # CONFIG_DEVTMPFS is not set
-          # CONFIG_VT is not set
-          # CONFIG_LEGACY_PTYS is not set
-          # CONFIG_DEVMEM is not set
-          # CONFIG_DEVPORT is not set
-          # CONFIG_HWMON is not set
-          # CONFIG_DNOTIFY is not set
           EOF
-          echo "=== Optimization overlay created ==="
+            
+            echo "=== Optimizations added to $O22_CONFIG ==="
+          else
+            echo "ERROR: o22.config not found!"
+            exit 1
+          fi
 
       - name: Build with Samsung Script
         run: |
@@ -127,13 +103,13 @@ jobs:
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
           export OUT_DIR="../out/target/product/a14m/obj/KLEAF_OBJ"
           export DIST_DIR="../out/target/product/a14m/obj/KLEAF_OBJ/dist"
-          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config optimize_overlay.config"
+          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config"
           export PROJECT="mgk_64_k66"
           export MODE="user"
           
           python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
             --kernel-defconfig mediatek-bazel_defconfig \
-            --kernel-defconfig-overlays "mt6768_overlay.config o22.config optimize_overlay.config" \
+            --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
             --kernel-build-config-overlays "" \
             -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
           
