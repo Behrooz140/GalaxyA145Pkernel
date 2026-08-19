@@ -77,7 +77,7 @@ jobs:
       - name: Build with Samsung Script
         run: |
           cd kernel
-          
+
           export USE_BAZEL_VERSION=6.4.0
           export DEVICE_MODULES_DIR="kernel_device_modules-6.6"
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
@@ -88,15 +88,16 @@ jobs:
           export MODE="user"
 
           MODULES_TO_REMOVE="drivers/hwtracing/coresight/coresight.ko,drivers/hwtracing/coresight/coresight-dummy.ko,drivers/hwtracing/coresight/coresight-etm4x.ko,drivers/hwtracing/coresight/coresight-funnel.ko,drivers/hwtracing/coresight/coresight-replicator.ko,drivers/hwtracing/coresight/coresight-tmc.ko"
-          
+
           python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
             --kernel-defconfig mediatek-bazel_defconfig \
-            --kernel-defconfig-overlays "mt6768_overlay.config o22.config final_overlay.config" \
+            --kernel-defconfig-overlays "$DEFCONFIG_OVERLAYS" \
             --kernel-build-config-overlays "" \
-            --module-remove "$MODULES_TO_REMOVE"
+            --module-remove "$MODULES_TO_REMOVE" \
+            -p "$PROJECT" \
+            -m "$MODE" \
+            -o "$BUILD_CONFIG"
 
-            -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
-          
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
 
