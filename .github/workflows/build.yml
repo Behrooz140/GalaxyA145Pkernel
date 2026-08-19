@@ -93,7 +93,7 @@ jobs:
             --kernel-defconfig mediatek-bazel_defconfig \
             --kernel-defconfig-overlays "mt6768_overlay.config o22.config final_overlay.config" \
             --kernel-build-config-overlays "" \
-            --module-remove "$MODULES_TO_REMOVE" \
+            --module-remove "$MODULES_TO_REMOVE"
 
             -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
           
