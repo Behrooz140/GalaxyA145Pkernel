@@ -86,6 +86,8 @@ jobs:
           export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config final_overlay.config"
           export PROJECT="mgk_64_k66"
           export MODE="user"
+
+          MODULES_TO_REMOVE="drivers/hwtracing/coresight/coresight.ko,drivers/hwtracing/coresight/coresight-dummy.ko,drivers/hwtracing/coresight/coresight-etm4x.ko,drivers/hwtracing/coresight/coresight-funnel.ko,drivers/hwtracing/coresight/coresight-replicator.ko,drivers/hwtracing/coresight/coresight-tmc.ko"
           
           python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
             --kernel-defconfig mediatek-bazel_defconfig \
