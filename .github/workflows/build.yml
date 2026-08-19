@@ -67,6 +67,12 @@ jobs:
           # CONFIG_HIST_TRIGGERS is not set
           # CONFIG_FTRACE is not set
           # CONFIG_CORESIGHT is not set
+          #CONFIG_CORESIGHT_LINK_AND_SINK_TMC is not set
+          # CONFIG_CORESIGHT_SOURCE_ETM4X is not set
+          # CONFIG_CORESIGHT_DUMMY is not set
+          # CONFIG_CORESIGHT_FUNNEL is not set
+          # CONFIG_CORESIGHT_REPLICATOR is not set
+          # CONFIG_CORESIGHT_TMC is not set
 
           # Disable MTK debug/error reporting
           # CONFIG_MTK_AEE_FEATURE is not set
