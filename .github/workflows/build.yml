@@ -49,7 +49,7 @@ jobs:
 
       - name: Optimize Kernel Config
         run: |
-          cat > kernel/kernel_device_modules-6.6/final_overlay.config << 'EOF'
+          cat > kernel/kernel_device_modules-6.6/kernel/configs/final_overlay.config << 'EOF'
           # CONFIG_DEBUG_INFO_BTF is not set
           # CONFIG_KASAN_HW_TAGS is not set
           # CONFIG_UBSAN is not set
