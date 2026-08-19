@@ -175,7 +175,7 @@ jobs:
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
 
-echo "=== Searching for final .config ==="
+          echo "=== Searching for final .config ==="
           
           # جستجوی فایل .config
           FINAL_DOT_CONFIG=$(find ../out -name ".config" -type f | head -1)
