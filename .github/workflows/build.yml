@@ -46,19 +46,10 @@ jobs:
           # جستجوی سراسری و تزریق هوشمند نسخه در تمام فایل‌های سورس KernelSU
           find KernelSU -type f -name "*.c" -exec sed -i '1i #undef KSU_VERSION\n#define KSU_VERSION 32525' {} +
 
+
       - name: Optimize Kernel Config
         run: |
-          O22_CONFIG=$(find kernel -name "o22.config" -type f | head -1)
-
-          if [ -f "$O22_CONFIG" ]; then
-            echo "========================================"
-            echo " Optimizing Kernel Config"
-            echo "========================================"
-            echo "Using: $O22_CONFIG"
-
-            cat >> "$O22_CONFIG" << 'EOF'
-
-          # Disable debug/tracing overhead
+          cat > kernel/kernel_device_modules-6.6/final_overlay.config << 'EOF'
           # CONFIG_DEBUG_INFO_BTF is not set
           # CONFIG_KASAN_HW_TAGS is not set
           # CONFIG_UBSAN is not set
@@ -67,14 +58,12 @@ jobs:
           # CONFIG_HIST_TRIGGERS is not set
           # CONFIG_FTRACE is not set
           # CONFIG_CORESIGHT is not set
-          #CONFIG_CORESIGHT_LINK_AND_SINK_TMC is not set
+          # CONFIG_CORESIGHT_LINK_AND_SINK_TMC is not set
           # CONFIG_CORESIGHT_SOURCE_ETM4X is not set
           # CONFIG_CORESIGHT_DUMMY is not set
           # CONFIG_CORESIGHT_FUNNEL is not set
           # CONFIG_CORESIGHT_REPLICATOR is not set
           # CONFIG_CORESIGHT_TMC is not set
-
-          # Disable MTK debug/error reporting
           # CONFIG_MTK_AEE_FEATURE is not set
           # CONFIG_MTK_AEE_AED is not set
           # CONFIG_MTK_AEE_HANGDET is not set
@@ -82,14 +71,8 @@ jobs:
           # CONFIG_MTK_HANG_DETECT is not set
           # CONFIG_IO_RECORD is not set
           EOF
+          echo "✅ final_overlay.config created"
 
-            echo
-            echo "===== CONFIG OVERRIDES ADDED ====="
-            tail -30 "$O22_CONFIG"
-          else
-            echo "ERROR: o22.config not found!"
-            exit 1
-          fi
 
       - name: Build with Samsung Script
         run: |
@@ -100,13 +83,13 @@ jobs:
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
           export OUT_DIR="../out/target/product/a14m/obj/KLEAF_OBJ"
           export DIST_DIR="../out/target/product/a14m/obj/KLEAF_OBJ/dist"
-          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config"
+          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config final_overlay.config"
           export PROJECT="mgk_64_k66"
           export MODE="user"
           
           python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
             --kernel-defconfig mediatek-bazel_defconfig \
-            --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
+            --kernel-defconfig-overlays "mt6768_overlay.config o22.config final_overlay.config" \
             --kernel-build-config-overlays "" \
             -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
           
