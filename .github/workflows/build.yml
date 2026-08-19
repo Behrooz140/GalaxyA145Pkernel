@@ -175,8 +175,27 @@ jobs:
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
 
+echo "=== Searching for final .config ==="
+          
+          # جستجوی فایل .config
+          FINAL_DOT_CONFIG=$(find ../out -name ".config" -type f | head -1)
+          
+          if [ -n "$FINAL_DOT_CONFIG" ]; then
+            echo "Found final config at: $FINAL_DOT_CONFIG"
+            cp "$FINAL_DOT_CONFIG" ../out/final_kernel_config.txt
+            
+            echo
+            echo "===== Checking disabled options ====="
+            grep -E "CONFIG_(DEBUG_INFO_BTF|KASAN_HW_TAGS|UBSAN|SCHED_DEBUG|SCHEDSTATS|HIST_TRIGGERS|FTRACE|CORESIGHT|MTK_AEE|HANG_DETECT|IO_RECORD)" "$FINAL_DOT_CONFIG" || true
+          else
+            echo "WARNING: .config not found!"
+            find ../out -name "*config*" | head -30
+          fi
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: A145P-Kernel-Output
-          path: out/target/product/a14m/obj/KLEAF_OBJ/dist/*
+          path: |
+            out/target/product/a14m/obj/KLEAF_OBJ/dist/*
+            out/final_kernel_config.txt
