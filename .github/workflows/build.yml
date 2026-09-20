@@ -197,30 +197,60 @@ jobs:
 
           mkdir -p "$RELEASE_DIR"
 
-          echo "=== Contents of dist directory ==="
-          find "$DIST_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
+          echo "=== Searching recursively inside dist ==="
+          echo
+
+          echo "=== All files in dist ==="
+          find "$DIST_DIR" -type f -printf '%p\n' | sort
 
           echo
           echo "=== Searching for Kernel images ==="
 
-          for file in Image Image.gz Image.lz4; do
-            if [ -f "$DIST_DIR/$file" ]; then
-              cp "$DIST_DIR/$file" "$RELEASE_DIR/$file"
-              echo "Found: $file"
-            else
-              echo "Not found: $file"
-            fi
-          done
+          # پیدا کردن Image در تمام پوشه‌های تو در تو
+          IMAGE_PATH=$(find "$DIST_DIR" -type f -name "Image" | head -1)
+
+          # پیدا کردن Image.gz در تمام پوشه‌های تو در تو
+          IMAGE_GZ_PATH=$(find "$DIST_DIR" -type f -name "Image.gz" | head -1)
+
+          # پیدا کردن Image.lz4 در تمام پوشه‌های تو در تو
+          IMAGE_LZ4_PATH=$(find "$DIST_DIR" -type f -name "Image.lz4" | head -1)
+
+          echo "Image path:     ${IMAGE_PATH:-NOT FOUND}"
+          echo "Image.gz path:  ${IMAGE_GZ_PATH:-NOT FOUND}"
+          echo "Image.lz4 path: ${IMAGE_LZ4_PATH:-NOT FOUND}"
+
+          echo
+
+          if [ -n "$IMAGE_PATH" ]; then
+            cp "$IMAGE_PATH" "$RELEASE_DIR/Image"
+            echo "Copied Image"
+          else
+            echo "WARNING: Image not found"
+          fi
+
+          if [ -n "$IMAGE_GZ_PATH" ]; then
+            cp "$IMAGE_GZ_PATH" "$RELEASE_DIR/Image.gz"
+            echo "Copied Image.gz"
+          else
+            echo "WARNING: Image.gz not found"
+          fi
+
+          if [ -n "$IMAGE_LZ4_PATH" ]; then
+            cp "$IMAGE_LZ4_PATH" "$RELEASE_DIR/Image.lz4"
+            echo "Copied Image.lz4"
+          else
+            echo "WARNING: Image.lz4 not found"
+          fi
 
           if [ -f "out/final_kernel_config.txt" ]; then
             cp "out/final_kernel_config.txt" "$RELEASE_DIR/final_kernel_config.txt"
-            echo "Found: final_kernel_config.txt"
+            echo "Copied final_kernel_config.txt"
           else
             echo "WARNING: final_kernel_config.txt not found"
           fi
 
           echo
-          echo "=== Release files ==="
+          echo "=== Final Release Files ==="
           ls -lh "$RELEASE_DIR"
 
       - name: Create GitHub Release
