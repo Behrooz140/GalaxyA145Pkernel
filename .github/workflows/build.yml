@@ -80,7 +80,8 @@ jobs:
             CONFIG_IP_SET_HASH_NET \
             CONFIG_NETFILTER_XT_SET \
             CONFIG_TMPFS_POSIX_ACL \
-            CONFIG_TMPFS_XATTR
+            CONFIG_TMPFS_XATTR \
+            CONFIG_SECURITY_SELINUX_BOOTPARAM
           do
             if grep -q "^${opt}=y" "$GKI_DEFCONFIG"; then
               echo "  Already enabled: $opt"
@@ -93,7 +94,7 @@ jobs:
           done
           
           echo "=== Done. Current relevant configs: ==="
-          grep -E "CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|PID_NS|DEVTMPFS|USER_NS|NETFILTER_XT_MATCH_ADDRTYPE)=" "$GKI_DEFCONFIG" || true
+          grep -E "CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|PID_NS|DEVTMPFS|USER_NS|NETFILTER_XT_MATCH_ADDRTYPE|SECURITY_SELINUX_BOOTPARAM)=" "$GKI_DEFCONFIG" || true
           
           cd ..
 
