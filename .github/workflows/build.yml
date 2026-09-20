@@ -97,15 +97,7 @@ jobs:
           
           cd ..
 
-
-      - name: Setup KernelSU
-        run: |
-          cd kernel-6.6
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          
-          # جستجوی سراسری و تزریق هوشمند نسخه در تمام فایل‌های سورس KernelSU
-          find KernelSU -type f -name "*.c" -exec sed -i '1i #undef KSU_VERSION\n#define KSU_VERSION 32525' {} +
-
+      
       - name: Build with Samsung Script
         run: |
           cd kernel
