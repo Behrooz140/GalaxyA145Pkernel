@@ -5,9 +5,6 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build-kernel:
     runs-on: ubuntu-latest
@@ -20,14 +17,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs python-is-python3 rsync
           
-          mkdir -p $HOME/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > $HOME/bin/repo
-          chmod a+x $HOME/bin/repo
-          export PATH="$HOME/bin:$PATH"
-          
-          # چک کردن که repo کار می‌کنه
-          which repo
-          repo --version
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          export PATH="~/bin:$PATH"
           
           git config --global user.name "Behrooz140"
           git config --global user.email "behrooz140@local.dev"
@@ -48,64 +41,33 @@ jobs:
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/tools/ kernel/tools/
 
 
-      - name: Apply Droidspaces GKI Patches & Configs
-        run: |
-          set -e
-          
-          echo "=== Downloading Droidspaces kABI patch for kernel 6.6 ==="
-          mkdir -p droidspaces-patches
-          curl -L -o droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch \
-            "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
-          
-          echo "=== Applying patch to kernel-6.6 ==="
-          cd kernel-6.6
-          
-          patch -p1 -N < ../droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch || true
-          echo "Patch step finished"
-          
-          echo "=== Enabling Droidspaces configs in gki_defconfig ==="
-          GKI_DEFCONFIG="arch/arm64/configs/gki_defconfig"
-          
-          # روش ساده و بدون sed پیچیده
-          for opt in \
-            CONFIG_SYSVIPC \
-            CONFIG_POSIX_MQUEUE \
-            CONFIG_IPC_NS \
-            CONFIG_PID_NS \
-            CONFIG_DEVTMPFS \
-            CONFIG_NETFILTER_XT_MATCH_ADDRTYPE \
-            CONFIG_USER_NS \
-            CONFIG_NETFILTER_XT_TARGET_REJECT \
-            CONFIG_NETFILTER_XT_TARGET_LOG \
-            CONFIG_NETFILTER_XT_MATCH_RECENT \
-            CONFIG_IP_SET \
-            CONFIG_IP_SET_HASH_IP \
-            CONFIG_IP_SET_HASH_NET \
-            CONFIG_NETFILTER_XT_SET \
-            CONFIG_TMPFS_POSIX_ACL \
-            CONFIG_TMPFS_XATTR \
-            CONFIG_SECURITY_SELINUX_BOOTPARAM
-          do
-            if grep -q "^${opt}=y" "$GKI_DEFCONFIG"; then
-              echo "  Already enabled: $opt"
-            else
-              # حذف خط قبلی اگر وجود داشته باشه (is not set)
-              sed -i "/# ${opt} is not set/d" "$GKI_DEFCONFIG"
-              echo "${opt}=y" >> "$GKI_DEFCONFIG"
-              echo "  Added: $opt"
-            fi
-          done
-          
-          echo "=== Done. Current relevant configs: ==="
-          grep -E "CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|PID_NS|DEVTMPFS|USER_NS|NETFILTER_XT_MATCH_ADDRTYPE|SECURITY_SELINUX_BOOTPARAM)=" "$GKI_DEFCONFIG" || true
-          
-          cd ..
-
-      
       - name: Build with Samsung Script
         run: |
+          # ورود به پوشه کرنل برای اجرای بیلد
           cd kernel
           
+          # پیدا کردن آخرین فایل اورلی (o22.config) و تزریق تنظیمات برای اطمینان از اورراید شدن
+          OVERLAY_FILE=$(find . -name "o22.config" | head -n 1)
+          echo "[-] Injecting security patches into $OVERLAY_FILE"
+          cat << 'EOF' >> "$OVERLAY_FILE"
+          
+          # Disable DM-Verity and AVB
+          # CONFIG_DM_VERITY is not set
+          # CONFIG_DM_VERITY_FEC is not set
+          # CONFIG_DM_VERITY_VERIFY_RO is not set
+          
+          # Disable Samsung Security and Knox
+          # CONFIG_SECURITY_DEFEX is not set
+          # CONFIG_SECURITY_KNOX_KDP is not set
+          # CONFIG_KNOX_KAP is not set
+          # CONFIG_SECURITY_DSMSA is not set
+          # CONFIG_SECURITY_PROCA is not set
+          
+          # Enable Permissive SELinux
+          CONFIG_SECURITY_SELINUX_DEVELOP=y
+          EOF
+          
+          # قفل کردن نسخه بیزل و اعمال متغیرهای محیطی ضروری
           export USE_BAZEL_VERSION=6.4.0
           export DEVICE_MODULES_DIR="kernel_device_modules-6.6"
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
@@ -121,157 +83,14 @@ jobs:
             --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
             --kernel-build-config-overlays "" \
             -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
-
-          # ========================================
-          # اینجا تنظیمات سبک‌سازی را اعمال می‌کنیم
-          # ========================================
-          echo "=== Applying lightweight config overrides ==="
           
-          # پیدا کردن فایل کانفیگ نهایی
-          FINAL_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
-          
-          if [ -f "$FINAL_CONFIG" ]; then
-            # حذف خطوط قبلی این گزینه‌ها (اگر وجود داشته باشند)
-            for opt in \
-              CONFIG_DEBUG_INFO_BTF \
-              CONFIG_KASAN_HW_TAGS \
-              CONFIG_UBSAN \
-              CONFIG_SCHED_DEBUG \
-              CONFIG_SCHEDSTATS \
-              CONFIG_HIST_TRIGGERS \
-              CONFIG_FTRACE \
-              CONFIG_CORESIGHT \
-              CONFIG_CORESIGHT_LINK_AND_SINK_TMC \
-              CONFIG_CORESIGHT_SOURCE_ETM4X \
-              CONFIG_CORESIGHT_DUMMY \
-              CONFIG_CORESIGHT_FUNNEL \
-              CONFIG_CORESIGHT_REPLICATOR \
-              CONFIG_CORESIGHT_TMC \
-              CONFIG_MTK_AEE_FEATURE \
-              CONFIG_MTK_AEE_AED \
-              CONFIG_MTK_AEE_HANGDET \
-              CONFIG_MTK_AEE_IPANIC \
-              CONFIG_MTK_HANG_DETECT \
-              CONFIG_IO_RECORD
-            do
-              # پاک کردن هر خطی که مربوط به این گزینه باشد
-              sed -i "/${opt}/d" "$FINAL_CONFIG"
-              # اضافه کردن نسخه غیرفعال
-              echo "# ${opt} is not set" >> "$FINAL_CONFIG"
-            done
-            
-            echo "Overrides applied to $FINAL_CONFIG"
-            echo "===== Checking applied configs ====="
-            grep -E "CONFIG_(DEBUG_INFO_BTF|KASAN|UBSAN|FTRACE|CORESIGHT|MTK_AEE|HANG_DETECT|IO_RECORD)" "$FINAL_CONFIG" || true
-          else
-            echo "WARNING: Final config not found at $FINAL_CONFIG"
-          fi
-
-          # اجرای اسکریپت اصلی بیلد
+          # اجرای اسکریپت اصلی بیلد سامسونگ
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
 
-          echo "=== Searching for final .config ==="
-          
-          # جستجوی فایل .config
-          FINAL_DOT_CONFIG=$(find ../out -name ".config" -type f | head -1)
-          
-          if [ -n "$FINAL_DOT_CONFIG" ]; then
-            echo "Found final config at: $FINAL_DOT_CONFIG"
-            cp "$FINAL_DOT_CONFIG" ../out/final_kernel_config.txt
-            
-            echo
-            echo "===== Checking disabled options ====="
-            grep -E "CONFIG_(DEBUG_INFO_BTF|KASAN_HW_TAGS|UBSAN|SCHED_DEBUG|SCHEDSTATS|HIST_TRIGGERS|FTRACE|CORESIGHT|MTK_AEE|HANG_DETECT|IO_RECORD)" "$FINAL_DOT_CONFIG" || true
-          else
-            echo "WARNING: .config not found!"
-            find ../out -name "*config*" | head -30
-          fi
 
-      - name: Prepare Kernel Release Files
-        run: |
-          set -e
-
-          DIST_DIR="out/target/product/a14m/obj/KLEAF_OBJ/dist"
-          RELEASE_DIR="release-files"
-
-          mkdir -p "$RELEASE_DIR"
-
-          echo "=== Searching recursively inside dist ==="
-          echo
-
-          echo "=== All files in dist ==="
-          find "$DIST_DIR" -type f -printf '%p\n' | sort
-
-          echo
-          echo "=== Searching for Kernel images ==="
-
-          # پیدا کردن Image در تمام پوشه‌های تو در تو
-          IMAGE_PATH=$(find "$DIST_DIR" -type f -name "Image" | head -1)
-
-          # پیدا کردن Image.gz در تمام پوشه‌های تو در تو
-          IMAGE_GZ_PATH=$(find "$DIST_DIR" -type f -name "Image.gz" | head -1)
-
-          # پیدا کردن Image.lz4 در تمام پوشه‌های تو در تو
-          IMAGE_LZ4_PATH=$(find "$DIST_DIR" -type f -name "Image.lz4" | head -1)
-
-          echo "Image path:     ${IMAGE_PATH:-NOT FOUND}"
-          echo "Image.gz path:  ${IMAGE_GZ_PATH:-NOT FOUND}"
-          echo "Image.lz4 path: ${IMAGE_LZ4_PATH:-NOT FOUND}"
-
-          echo
-
-          if [ -n "$IMAGE_PATH" ]; then
-            cp "$IMAGE_PATH" "$RELEASE_DIR/Image"
-            echo "Copied Image"
-          else
-            echo "WARNING: Image not found"
-          fi
-
-          if [ -n "$IMAGE_GZ_PATH" ]; then
-            cp "$IMAGE_GZ_PATH" "$RELEASE_DIR/Image.gz"
-            echo "Copied Image.gz"
-          else
-            echo "WARNING: Image.gz not found"
-          fi
-
-          if [ -n "$IMAGE_LZ4_PATH" ]; then
-            cp "$IMAGE_LZ4_PATH" "$RELEASE_DIR/Image.lz4"
-            echo "Copied Image.lz4"
-          else
-            echo "WARNING: Image.lz4 not found"
-          fi
-
-          if [ -f "out/final_kernel_config.txt" ]; then
-            cp "out/final_kernel_config.txt" "$RELEASE_DIR/final_kernel_config.txt"
-            echo "Copied final_kernel_config.txt"
-          else
-            echo "WARNING: final_kernel_config.txt not found"
-          fi
-
-          echo
-          echo "=== Final Release Files ==="
-          ls -lh "$RELEASE_DIR"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: A145P-Kernel-${{ github.sha }}
-          name: A145P Kernel - ${{ github.sha }}
-          body: |
-            ## A145P Kernel
-
-            Device: Samsung Galaxy A14 SM-A145P
-            Codename: a14m
-            Kernel: 6.6
-
-            Commit:
-            ${{ github.sha }}
-
-            This release contains the kernel images generated by GitHub Actions.
-          files: |
-            release-files/Image
-            release-files/Image.gz
-            release-files/Image.lz4
-            release-files/final_kernel_config.txt
-          make_latest: true
+          name: A145P-Kernel-Output
+          path: out/target/product/a14m/obj/KLEAF_OBJ/dist/*
