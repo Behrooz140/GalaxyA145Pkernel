@@ -602,6 +602,7 @@ unsigned int _mt_cpufreq_get_cpu_level(void)
 	}
 
 	val = (*efuse_buf);
+	pr_info("MTK_CPUFREQ: EFUSE segment raw = 0x%08X\n", val);
 	kfree(efuse_buf);
 
 	turbo_flag = 0;
