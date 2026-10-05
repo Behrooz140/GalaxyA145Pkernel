@@ -574,6 +574,7 @@ int mt_cpufreq_dts_map(void)
 
 unsigned int _mt_cpufreq_get_cpu_level(void)
 {
+	pr_info("MTK_CPUFREQ: ENTER get_cpu_level\n");
 
 	unsigned int lv = CPU_LEVEL_0;
 	int val = 0;
