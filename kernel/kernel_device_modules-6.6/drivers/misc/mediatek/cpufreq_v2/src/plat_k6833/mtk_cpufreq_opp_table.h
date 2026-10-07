@@ -135,7 +135,7 @@
 #define CPU_DVFS_FREQ15_LL_B20G		500000		/* KHz */
 
 /* for DVFS OPP table B */
-#define CPU_DVFS_FREQ0_L_B20G		2000000		/* KHz */
+#define CPU_DVFS_FREQ0_L_B20G             2202000 /* KHz */
 #define CPU_DVFS_FREQ1_L_B20G		1953000		/* KHz */
 #define CPU_DVFS_FREQ2_L_B20G		1906000		/* KHz */
 #define CPU_DVFS_FREQ3_L_B20G		1836000		/* KHz */
