@@ -124,8 +124,15 @@ jobs:
           chmod +x ./kernel_device_modules-6.6/build.sh
           ./kernel_device_modules-6.6/build.sh
 
+
+          cd ..
+          mkdir -p final_kernel
+          find out/target/product/a14m/obj/KLEAF_OBJ/dist -type f \( -name "Image" -o -name "Image.gz" \) -exec cp -v {} final_kernel/ \;
+          ls -lh final_kernel/
+
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: A145P-Kernel-Output
-          path: out/target/product/a14m/obj/KLEAF_OBJ/dist/*
+          name: A145P-Kernel-Image-Only
+          path: final_kernel/*
