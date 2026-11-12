@@ -463,6 +463,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
+          # Create the tag on the exact commit that was built, not on the
+          # repository default branch.
+          target_commitish: ${{ github.sha }}
           name: A145P Kernel ${{ steps.meta.outputs.version }}
           body_path: release/A145P-Kernel-v${{ steps.meta.outputs.version }}/RELEASE_NOTES.md
           files: |
@@ -475,6 +478,7 @@ jobs:
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/Image
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/Image.gz
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/System.map
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/.config
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/config
           draft: true
           prerelease: false
