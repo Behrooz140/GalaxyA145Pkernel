@@ -155,7 +155,9 @@ jobs:
           # KernelSU/.git, which would make Kbuild fall back to version 16 and
           # the manager would reject the kernel. 30000 + 2680 = 32680.
           KSU_VERSION="$((30000 + KSU_COMMITS))"
-          find KernelSU -type f -name '*.c' \
+          # We are already inside the KernelSU checkout, so search the
+          # current directory rather than a nested KernelSU/ path.
+          find . -type f -name '*.c' \
             -exec sed -i "1i #undef KSU_VERSION\n#define KSU_VERSION ${KSU_VERSION}" {} +
           echo "Pinned KSU_VERSION=${KSU_VERSION}"
           cd ..
