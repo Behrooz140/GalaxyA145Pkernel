@@ -48,6 +48,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Collect build metadata
+        id: meta
         run: |
           set -euo pipefail
           {
@@ -67,6 +68,9 @@ jobs:
             VERSION="0.0.0-${SHORT_SHA}"
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          # Expose the value as a step output too: the expression env context
+          # is not reliably populated from GITHUB_ENV.
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
 
       - name: Set up environment & sync AOSP toolchains
@@ -446,7 +450,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: A145P-Kernel-v${{ env.VERSION }}
+          name: A145P-Kernel-v${{ steps.meta.outputs.version }}
           path: |
             release/**
             build.log
@@ -459,19 +463,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
-          name: A145P Kernel ${{ env.VERSION }}
-          body_path: release/A145P-Kernel-v${{ env.VERSION }}/RELEASE_NOTES.md
+          name: A145P Kernel ${{ steps.meta.outputs.version }}
+          body_path: release/A145P-Kernel-v${{ steps.meta.outputs.version }}/RELEASE_NOTES.md
           files: |
-            release/A145P-Kernel-v${{ env.VERSION }}/A145P-Kernel-v${{ env.VERSION }}-boot.img
-            release/A145P-Kernel-v${{ env.VERSION }}/A145P-Kernel-v${{ env.VERSION }}-Odin.tar.md5
-            release/A145P-Kernel-v${{ env.VERSION }}/A145P-BatteryCare-v1.0.zip
-            release/A145P-Kernel-v${{ env.VERSION }}/RELEASE_NOTES.md
-            release/A145P-Kernel-v${{ env.VERSION }}/build-info.txt
-            release/A145P-Kernel-v${{ env.VERSION }}/SHA256SUMS
-            release/A145P-Kernel-v${{ env.VERSION }}/images/Image
-            release/A145P-Kernel-v${{ env.VERSION }}/images/Image.gz
-            release/A145P-Kernel-v${{ env.VERSION }}/images/System.map
-            release/A145P-Kernel-v${{ env.VERSION }}/images/config
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-Kernel-v${{ steps.meta.outputs.version }}-boot.img
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-Kernel-v${{ steps.meta.outputs.version }}-Odin.tar.md5
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-BatteryCare-v1.0.zip
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/RELEASE_NOTES.md
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/build-info.txt
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/SHA256SUMS
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/Image
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/Image.gz
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/System.map
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/images/config
           draft: true
           prerelease: false
           fail_on_unmatched_files: true
