@@ -1,0 +1,17 @@
+# Local build outputs
+/out/
+/release/
+/.build-tools/
+build.log
+droidspaces-patches/
+
+# Injected at build time by the CI workflow (never commit)
+/kernel-6.6/KernelSU/
+/kernel-6.6/drivers/kernelsu
+
+# Reference blobs (proprietary / large)
+/stock/*.img
+
+# Python caches
+__pycache__/
+*.pyc

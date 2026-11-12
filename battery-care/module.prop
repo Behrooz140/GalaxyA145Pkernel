@@ -1,0 +1,6 @@
+id=battery_care_a14
+name=Battery Care for Galaxy A14 (A145P)
+version=v1.0
+versionCode=1
+author=Behrooz140
+description=Limits charging to a chosen level (default 85%) through the Samsung batt_full_capacity interface. The phone keeps running from the charger without filling the battery.

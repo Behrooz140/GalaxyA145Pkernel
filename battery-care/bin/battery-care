@@ -1,0 +1,61 @@
+#!/system/bin/sh
+# Battery Care CLI
+#   battery-care on [50-100]   enable with a charge limit (default 85)
+#   battery-care off           disable (full charge)
+#   battery-care status        show configuration and current mode
+DATA=/data/adb/battery-care
+CONF="$DATA/config"
+SYS=/sys/class/power_supply/battery/batt_full_capacity
+
+usage() {
+    echo "usage: battery-care {on [50-100] | off | status}"
+}
+
+apply_limit() {
+    v="$1"
+    if [ "$v" -eq 100 ]; then
+        echo "100" > "$SYS"
+    else
+        echo "$v OPTION" > "$SYS"
+    fi
+}
+
+if [ ! -e "$SYS" ]; then
+    echo "ERROR: $SYS not found (unsupported kernel?)"
+    exit 1
+fi
+
+case "${1:-}" in
+    on|set)
+        v="${2:-85}"
+        case "$v" in
+            ''|*[!0-9]*) usage; exit 1 ;;
+        esac
+        if [ "$v" -lt 50 ] || [ "$v" -gt 100 ]; then
+            echo "ERROR: limit must be between 50 and 100"
+            exit 1
+        fi
+        mkdir -p "$DATA"
+        echo "LIMIT=$v" > "$CONF"
+        apply_limit "$v"
+        echo "Battery Care: ON, charging stops at ${v}%"
+        echo "current mode: $(cat "$SYS")"
+        ;;
+    off)
+        mkdir -p "$DATA"
+        echo "LIMIT=off" > "$CONF"
+        apply_limit 100
+        echo "Battery Care: OFF (full charge)"
+        echo "current mode: $(cat "$SYS")"
+        ;;
+    status)
+        echo "config file : ${CONF}"
+        if [ -f "$CONF" ]; then cat "$CONF"; else echo "LIMIT=85 (default)"; fi
+        echo "mode value  : $(cat "$SYS" 2>/dev/null)"
+        echo "            (0=full, 1=OPTION, 2=SLEEP, 3=HIGHSOC)"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

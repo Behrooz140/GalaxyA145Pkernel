@@ -2,63 +2,170 @@ name: Build Kernel A145P
 
 on:
   push:
-    branches: [ "main" ]
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g. v1.0). Leave empty to only build an artifact.'
+        required: false
+        default: ''
+      include_modules:
+        description: 'Include the freshly built kernel modules (.ko) in the package'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  DEVICE_MODULES_DIR: kernel_device_modules-6.6
+  PROJECT: mgk_64_k66
+  MODE: user
+  # Must stay identical to the stock firmware so vermagic matches:
+  # 6.6.92-android15-8-abA145PXXSDDZH1-4k
+  BUILD_NUMBER: A145PXXSDDZH1
+  EXPECTED_KERNEL_RELEASE: 6.6.92-android15-8-abA145PXXSDDZH1-4k
+  KSU_TAG: v3.3.1
+  KSU_COMMIT: 0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d
+  KSU_COMMITS: '2680'
+  DROIDSPACES_COMMIT: cdadb9eb5d0f86aacffff60776333e6f6b73a30a
+  MBOOTIMG_COMMIT: d2bb0af5ba6d3198a3e99529c97eda1be0b5a093
+  AVB_COMMIT: 3328b7b60ae384e1a92f44d7e6f3ac021c2b05be
+  BOOT_PARTITION_SIZE: '33554432'
+  # build.sh forwards $DEBUG_ARGS to bazel. --nokleaf_localversion makes the
+  # workspace-status script use kernel-6.6/scripts/setlocalversion instead of
+  # the git-hash path, so the release string is exactly the stock one.
+  DEBUG_ARGS: --nokleaf_localversion
 
 jobs:
   build-kernel:
     runs-on: ubuntu-latest
+    timeout-minutes: 240
+
     steps:
-      - name: Checkout Samsung Kernel Source
+      - name: Checkout kernel source
         uses: actions/checkout@v4
 
-      - name: Set up Environment & Sync AOSP Toolchains
+      - name: Collect build metadata
         run: |
+          set -euo pipefail
+          {
+            echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)"
+            echo "FULL_SHA=$(git rev-parse HEAD)"
+            echo "SHORT_SHA=$(git rev-parse --short=12 HEAD)"
+          } >> "$GITHUB_ENV"
+
+          VERSION=""
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ -n "${{ inputs.release_tag }}" ]; then
+            VERSION="${{ inputs.release_tag }}"
+            VERSION="${VERSION#v}"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="0.0.0-${SHORT_SHA}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Building version: $VERSION"
+
+      - name: Set up environment & sync AOSP toolchains
+        run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs python-is-python3 rsync
-          
-          mkdir -p $HOME/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > $HOME/bin/repo
-          chmod a+x $HOME/bin/repo
+          sudo apt-get install -y python3 git curl bc bison flex libssl-dev make zip nodejs \
+            python-is-python3 rsync patch lz4
+
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo > "$HOME/bin/repo"
+          chmod a+x "$HOME/bin/repo"
           export PATH="$HOME/bin:$PATH"
-          
+
           which repo
           repo --version
-          
+
           git config --global user.name "Behrooz140"
           git config --global user.email "behrooz140@local.dev"
-          
+
           mkdir aosp_toolchain
           cd aosp_toolchain
-          repo init -u https://android.googlesource.com/kernel/manifest -b common-android15-6.6 --depth=1
-          repo sync -c -j$(nproc) --no-clone-bundle --no-tags
-          
+          repo init -u https://android.googlesource.com/kernel/manifest \
+            -b common-android15-6.6 --depth=1
+          repo sync -c -j"$(nproc)" --no-clone-bundle --no-tags --retry-fetches=3
+
+          echo "AOSP_MANIFEST_COMMIT=$(git -C .repo/manifests rev-parse HEAD)" >> "$GITHUB_ENV"
           cd ..
 
           mkdir -p kernel/build kernel/external kernel/prebuilts kernel/tools
-          
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/build/ kernel/build/
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/external/ kernel/external/
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/prebuilts/ kernel/prebuilts/
           rsync -a --exclude=".git" --exclude=".repo" aosp_toolchain/tools/ kernel/tools/
 
-      - name: Apply Droidspaces GKI Patches & Configs
+      - name: Fetch pinned image tools (mkbootimg + avbtool)
         run: |
-          set -e
-          
-          echo "=== Downloading Droidspaces kABI patch for kernel 6.6 ==="
+          set -euo pipefail
+          TOOLS="$GITHUB_WORKSPACE/.build-tools"
+          rm -rf "$TOOLS"
+          mkdir -p "$TOOLS"
+
+          git clone -q https://android.googlesource.com/platform/system/tools/mkbootimg "$TOOLS/mkbootimg"
+          git -C "$TOOLS/mkbootimg" checkout -q "${MBOOTIMG_COMMIT}"
+          test "$(git -C "$TOOLS/mkbootimg" rev-parse HEAD)" = "${MBOOTIMG_COMMIT}"
+
+          git clone -q https://android.googlesource.com/platform/external/avb "$TOOLS/avb"
+          git -C "$TOOLS/avb" checkout -q "${AVB_COMMIT}"
+          test "$(git -C "$TOOLS/avb" rev-parse HEAD)" = "${AVB_COMMIT}"
+          python3 "$TOOLS/avb/avbtool.py" version
+
+      - name: Apply pinned Droidspaces GKI patch
+        run: |
+          set -euo pipefail
+          PATCH_URL="https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/${DROIDSPACES_COMMIT}/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
+
           mkdir -p droidspaces-patches
-          curl -L -o droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch \
-            "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
-          
-          echo "=== Applying patch to kernel-6.6 ==="
+          curl -fL --retry 3 -o droidspaces-patches/001-sysvipc-kabi.patch "$PATCH_URL"
+          sha256sum droidspaces-patches/001-sysvipc-kabi.patch | tee droidspaces-patches/SHA256SUMS
+
           cd kernel-6.6
-          
-          patch -p1 -N < ../droidspaces-patches/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch || true
-          echo "Patch step finished"
-          
-          echo "=== Enabling Droidspaces configs in gki_defconfig ==="
-          GKI_DEFCONFIG="arch/arm64/configs/gki_defconfig"
+          patch -p1 -N --dry-run < ../droidspaces-patches/001-sysvipc-kabi.patch
+          patch -p1 -N < ../droidspaces-patches/001-sysvipc-kabi.patch
+          grep -q "CONFIG_SYSVIPC" include/linux/sched.h
+          echo "Droidspaces patch applied."
+
+      - name: Set up KernelSU ${KSU_TAG}
+        run: |
+          set -euo pipefail
+          cd kernel-6.6
+
+          git clone https://github.com/tiann/KernelSU.git KernelSU
+          cd KernelSU
+          git checkout -q "${KSU_COMMIT}"
+          test "$(git rev-parse HEAD)" = "${KSU_COMMIT}"
+          KSU_COMMITS_ACTUAL="$(git rev-list --count HEAD)"
+          echo "KernelSU commits: ${KSU_COMMITS_ACTUAL} (expected ${KSU_COMMITS})"
+          test "${KSU_COMMITS_ACTUAL}" = "${KSU_COMMITS}"
+          echo "KernelSU version: $((30000 + KSU_COMMITS_ACTUAL))"
+
+          # Pin the version macro as well. The Bazel sandbox may not expose
+          # KernelSU/.git, which would make Kbuild fall back to version 16 and
+          # the manager would reject the kernel. 30000 + 2680 = 32680.
+          KSU_VERSION="$((30000 + KSU_COMMITS))"
+          find KernelSU -type f -name '*.c' \
+            -exec sed -i "1i #undef KSU_VERSION\n#define KSU_VERSION ${KSU_VERSION}" {} +
+          echo "Pinned KSU_VERSION=${KSU_VERSION}"
+          cd ..
+
+          ln -sfn "$(realpath --relative-to=drivers KernelSU/kernel)" drivers/kernelsu
+          grep -q "kernelsu" drivers/Makefile || \
+            printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
+          grep -q 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig || \
+            sed -i '/endmenu/i\source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+      - name: Enable required kernel configs
+        run: |
+          set -euo pipefail
+          GKI_DEFCONFIG="kernel-6.6/arch/arm64/configs/gki_defconfig"
 
           for opt in \
             CONFIG_SYSVIPC \
@@ -79,33 +186,55 @@ jobs:
             CONFIG_TMPFS_XATTR
           do
             if grep -q "^${opt}=y" "$GKI_DEFCONFIG"; then
-              echo "  Already enabled: $opt"
+              echo "  already enabled: $opt"
             else
-
               sed -i "/# ${opt} is not set/d" "$GKI_DEFCONFIG"
               echo "${opt}=y" >> "$GKI_DEFCONFIG"
-              echo "  Added: $opt"
+              echo "  enabled: $opt"
             fi
           done
-          
-          echo "=== Done. Current relevant configs: ==="
-          grep -E "CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|PID_NS|DEVTMPFS|USER_NS|NETFILTER_XT_MATCH_ADDRTYPE)=" "$GKI_DEFCONFIG" || true
-          
-          cd ..
 
+          echo "=== Required configs ==="
+          grep -E "^CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|PID_NS|USER_NS|DEVTMPFS|IP_SET|NETFILTER_XT_SET|TMPFS_POSIX_ACL|TMPFS_XATTR)=y" "$GKI_DEFCONFIG"
 
-      - name: Setup KernelSU
+          # Keep module compatibility with the previous working build: stock
+          # modules on /vendor must keep loading, so do not enable the GKI
+          # symbol-protection extra checks.
+          sed -i "/^CONFIG_MODULE_SIG_PROTECT=/d" "$GKI_DEFCONFIG"
+          sed -i "/# CONFIG_MODULE_SIG_PROTECT is not set/d" "$GKI_DEFCONFIG"
+          echo "# CONFIG_MODULE_SIG_PROTECT is not set" >> "$GKI_DEFCONFIG"
+          grep -q "^# CONFIG_MODULE_SIG_PROTECT is not set" "$GKI_DEFCONFIG"
+          echo "Disabled CONFIG_MODULE_SIG_PROTECT (matches previous working build)"
+
+      - name: Preflight localversion check
         run: |
-          cd kernel-6.6
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          
-          find KernelSU -type f -name "*.c" -exec sed -i '1i #undef KSU_VERSION\n#define KSU_VERSION 32680' {} +
+          set -euo pipefail
+          echo "DEBUG_ARGS=${DEBUG_ARGS:-}"
+          case " ${DEBUG_ARGS:-} " in
+            *" --nokleaf_localversion "*) ;;
+            *) echo "ERROR: build must pass --nokleaf_localversion"; exit 1 ;;
+          esac
 
-      - name: Build with Samsung Script
-        run: |
-         
           cd kernel
-          
+          # Mirror the build: --nokleaf_localversion means the stamp script uses
+          # kernel-6.6/scripts/setlocalversion, i.e. no git hash is embedded.
+          unset KLEAF_USE_KLEAF_LOCALVERSION
+          STATUS="$(BUILD_NUMBER="${BUILD_NUMBER}" \
+            KLEAF_REPO_MANIFEST="$PWD/${DEVICE_MODULES_DIR}/fake_manifest.xml" \
+            SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
+            python3 build/kernel/kleaf/workspace_status_stamp.py)"
+          echo "$STATUS"
+          SCM="$(printf '%s\n' "$STATUS" | sed -n 's/^STABLE_SCMVERSIONS //p' | python3 -c 'import json,sys; print(json.load(sys.stdin)["kernel-6.6"])')"
+          echo "scmversion kernel-6.6: $SCM"
+          ! printf '%s' "$SCM" | grep -q -- '-dirty'
+          test "$SCM" = "-ab${BUILD_NUMBER}"
+          echo "Version preflight OK -> ${EXPECTED_KERNEL_RELEASE}"
+
+      - name: Build kernel
+        run: |
+          set -euo pipefail
+          cd kernel
+
           export USE_BAZEL_VERSION=6.4.0
           export DEVICE_MODULES_DIR="kernel_device_modules-6.6"
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
@@ -114,25 +243,235 @@ jobs:
           export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config"
           export PROJECT="mgk_64_k66"
           export MODE="user"
-          
-          python3 kernel_device_modules-6.6/scripts/gen_build_config.py \
+
+          python3 "${DEVICE_MODULES_DIR}/scripts/gen_build_config.py" \
             --kernel-defconfig mediatek-bazel_defconfig \
             --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
             --kernel-build-config-overlays "" \
-            -m user -o ../out/target/product/a14m/obj/KERNEL_OBJ/build.config
-          
-          chmod +x ./kernel_device_modules-6.6/build.sh
-          ./kernel_device_modules-6.6/build.sh
+            -m user -o "${BUILD_CONFIG}"
 
+          chmod +x "./${DEVICE_MODULES_DIR}/build.sh"
+          set +e
+          "./${DEVICE_MODULES_DIR}/build.sh" 2>&1 | tee "${GITHUB_WORKSPACE}/build.log"
+          BUILD_RC=${PIPESTATUS[0]}
+          set -e
+          echo "build.sh exit code: ${BUILD_RC}"
+          exit "${BUILD_RC}"
 
-          cd ..
-          mkdir -p final_kernel
-          find out/target/product/a14m/obj/KLEAF_OBJ/dist -type f \( -name "Image" -o -name "Image.gz" \) -exec cp -v {} final_kernel/ \;
-          ls -lh final_kernel/
+      - name: Package release
+        env:
+          INCLUDE_MODULES: ${{ inputs.include_modules }}
+        run: |
+          set -euo pipefail
+          DIST="out/target/product/a14m/obj/KLEAF_OBJ/dist"
+          test -d "$DIST"
 
+          IMAGE="$(find "$DIST" -type f -name Image | head -n1)"
+          IMAGE_GZ="$(find "$DIST" -type f -name 'Image.gz' | head -n1)"
+          SYSTEM_MAP="$(find "$DIST" -type f -name System.map | head -n1)"
+          KCONFIG="$(find "$DIST" -type f -name '.config' | head -n1)"
+          if [ -z "$KCONFIG" ]; then
+            KCONFIG="$(find "$DIST" -type f -name 'config' | head -n1)"
+          fi
+          # Fallbacks: Kleaf sometimes leaves System.map/.config only in the
+          # KLEAF_OBJ tree (or the merged defconfig under arch/arm64/configs).
+          KOBJ="out/target/product/a14m/obj/KLEAF_OBJ"
+          [ -n "$SYSTEM_MAP" ] || SYSTEM_MAP="$(find "$KOBJ" -type f -name System.map | head -n1)"
+          if [ -z "$KCONFIG" ]; then
+            KCONFIG="$(find "$KOBJ" -type f -path '*arch/arm64/configs/mediatek-bazel_defconfig' | head -n1)"
+          fi
+          for f in "$IMAGE" "$IMAGE_GZ" "$SYSTEM_MAP" "$KCONFIG"; do
+            test -n "$f" && test -f "$f" || { echo "Missing build output"; exit 1; }
+          done
 
-      - name: Upload Artifacts
+          echo "=== Config sanity check ==="
+          for opt in CONFIG_KSU CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_USER_NS CONFIG_MODVERSIONS; do
+            grep -q "^${opt}=y" "$KCONFIG" || { echo "ERROR: ${opt} is not enabled in $KCONFIG"; exit 1; }
+          done
+          grep -q "^# CONFIG_MODULE_SIG_PROTECT is not set" "$KCONFIG" || {
+            echo "ERROR: CONFIG_MODULE_SIG_PROTECT must stay disabled"; exit 1; }
+          grep -q '^CONFIG_LOCALVERSION="-4k"' "$KCONFIG" || {
+            echo "ERROR: CONFIG_LOCALVERSION must be -4k"; exit 1; }
+          echo "KSU/SYSVIPC/namespaces enabled; SIG_PROTECT off; LOCALVERSION=-4k"
+
+          KERNEL_RELEASE="$(strings "$IMAGE" | sed -n 's/^Linux version \([^ ]*\) .*/\1/p' | head -n1)"
+          echo "Detected kernel release: $KERNEL_RELEASE"
+          if [ "$KERNEL_RELEASE" != "$EXPECTED_KERNEL_RELEASE" ]; then
+            echo "ERROR: kernel release mismatch (expected $EXPECTED_KERNEL_RELEASE)"
+            strings "$IMAGE" | grep -m3 '^Linux version' || true
+            exit 1
+          fi
+
+          REL="release/A145P-Kernel-v${VERSION}"
+          mkdir -p "$REL/images"
+
+          cp -v "$IMAGE" "$REL/images/Image"
+          cp -v "$IMAGE_GZ" "$REL/images/Image.gz"
+          cp -v "$SYSTEM_MAP" "$REL/images/System.map"
+          cp -v "$KCONFIG" "$REL/images/.config"
+          cp -v "$KCONFIG" "$REL/images/config"
+
+          if [ "${INCLUDE_MODULES}" = "true" ]; then
+            mkdir -p "$REL/modules"
+            find "$DIST" -type f -name '*.ko' -print0 | while IFS= read -r -d '' ko; do
+              mkdir -p "$REL/modules/$(dirname "${ko#$DIST/}")"
+              cp -v "$ko" "$REL/modules/${ko#$DIST/}"
+            done
+            echo "Included $(find "$REL/modules" -name '*.ko' | wc -l) modules."
+          fi
+
+          BOOT_IMG="$REL/A145P-Kernel-v${VERSION}-boot.img"
+          MBOOTIMG="$GITHUB_WORKSPACE/.build-tools/mkbootimg/mkbootimg.py" \
+          AVBTOOL="$GITHUB_WORKSPACE/.build-tools/avb/avbtool.py" \
+          AVB_KEY="$GITHUB_WORKSPACE/.build-tools/avb/test/data/testkey_rsa4096.pem" \
+          AVB_ALGORITHM="SHA256_RSA4096" \
+          BOOT_PARTITION_SIZE="${BOOT_PARTITION_SIZE}" \
+            bash scripts/build_boot_image.sh "$IMAGE_GZ" "$BOOT_IMG"
+
+          # Odin package: boot.img inside a plain tar (and .tar.md5 variant).
+          # Odin expects the partition image to be named boot.img inside the tar.
+          ODIN_STAGE="$REL/.odin-stage"
+          REL_ABS="$PWD/$REL"
+          mkdir -p "$ODIN_STAGE"
+          cp "$BOOT_IMG" "$ODIN_STAGE/boot.img"
+          ODIN_NAME="A145P-Kernel-v${VERSION}-Odin.tar"
+          (
+            cd "$ODIN_STAGE"
+            tar -cf "$ODIN_NAME" boot.img
+            ODIN_MD5="$(md5sum "$ODIN_NAME" | cut -d' ' -f1)"
+            # Samsung-style trailer: hash + final (renamed) file name.
+            printf '%s  %s\n' "$ODIN_MD5" "${ODIN_NAME}.md5" >> "$ODIN_NAME"
+            mv "$ODIN_NAME" "${ODIN_NAME}.md5"
+            mv "${ODIN_NAME}.md5" "$REL_ABS/"
+          )
+          rm -rf "$ODIN_STAGE"
+
+          # KernelSU module
+          OUT_ZIP="$PWD/$REL/A145P-BatteryCare-v1.0.zip"
+          (
+            cd battery-care
+            ZIP_INPUTS="module.prop post-fs-data.sh service.sh uninstall.sh bin"
+            [ -f README.md ] && ZIP_INPUTS="$ZIP_INPUTS README.md"
+            zip -r -q "$OUT_ZIP" $ZIP_INPUTS
+          )
+          test -s "$OUT_ZIP"
+
+          # Build info
+          {
+            echo "Kernel release : ${KERNEL_RELEASE}"
+            echo "Package version: ${VERSION}"
+            echo "Built at (UTC)  : $(date -u '+%Y-%m-%d %H:%M:%S')"
+            echo "Source commit   : ${FULL_SHA}"
+            echo "Source date     : $(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S') (SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH})"
+            echo "Build number    : ${BUILD_NUMBER} (localversion -ab suffix)"
+            echo "AOSP manifest   : common-android15-6.6 @ ${AOSP_MANIFEST_COMMIT}"
+            echo "KernelSU        : ${KSU_TAG} (${KSU_COMMIT}, ${KSU_COMMITS} commits, version $((30000 + KSU_COMMITS)))"
+            echo "Droidspaces     : ${DROIDSPACES_COMMIT} (SYSVIPC kABI padding)"
+            echo "mkbootimg       : ${MBOOTIMG_COMMIT}"
+            echo "avbtool         : ${AVB_COMMIT}"
+            echo "Boot partition  : ${BOOT_PARTITION_SIZE} bytes"
+            echo "AVB signing key : AOSP testkey_rsa4096 (SHA256_RSA4096)"
+            echo "Modules included: ${INCLUDE_MODULES}"
+            echo "Stock config    : configs/stock-a145pxxsddzh1.config"
+          } | tee "$REL/build-info.txt"
+
+          cat > "$REL/RELEASE_NOTES.md" <<EOF
+          # Galaxy A14 (SM-A145P) custom kernel ${VERSION}
+
+          Kernel release: \`${KERNEL_RELEASE}\`
+          Base firmware: \`A145PXXSDDZH1\`
+          Built from commit: \`${FULL_SHA}\`
+
+          ## Contents
+
+          - \`A145P-Kernel-v${VERSION}-boot.img\` — 32 MiB boot image (header v4, AVB test-key signed)
+          - \`A145P-Kernel-v${VERSION}-Odin.tar.md5\` — Odin AP slot package containing \`boot.img\`
+          - \`images/Image\`, \`images/Image.gz\`, \`images/System.map\`, \`images/.config\`
+          - \`A145P-BatteryCare-v1.0.zip\` — KernelSU module for charge limiting (50–100 %)
+          - \`build-info.txt\`, \`SHA256SUMS\`
+
+          ## Features
+
+          - KernelSU ${KSU_TAG} (version $((30000 + KSU_COMMITS)))
+          - SYSVIPC / POSIX mqueue / IPC + PID + USER namespaces (Droidspaces-ready)
+          - TMPFS POSIX ACL/XATTR, netfilter/ipset additions
+          - Battery Care support (Samsung \`batt_full_capacity\` interface)
+
+          ## Requirements
+
+          - **Unlocked bootloader** (the boot image is signed with a public AOSP test key, not Samsung's key).
+          - Recommended: KernelSU manager ${KSU_TAG} or newer.
+
+          ## Flash (Odin)
+
+          1. Power the phone off.
+          2. Enter Download mode: hold **Vol+ and Vol−** while connecting USB.
+          3. Long-press **Vol+** to unlock the download mode warning.
+          4. In Odin, put \`A145P-Kernel-v${VERSION}-Odin.tar.md5\` in the **AP** slot.
+          5. **Do not** enable "Re-Partition". Flash and let the phone reboot.
+
+          > The boot image carries a self-consistent AVB hash footer signed with a public
+          > AOSP test key. With an unlocked bootloader this is accepted, exactly like the
+          > previously working build.
+
+          ## Battery Care (KernelSU module)
+
+          Install \`A145P-BatteryCare-v1.0.zip\` from the KernelSU manager and reboot.
+          Default limit is **85 %**. Change it with:
+
+          \`\`\`sh
+          su -c "/data/adb/battery-care/battery-care status"
+          su -c "/data/adb/battery-care/battery-care on 80"
+          su -c "/data/adb/battery-care/battery-care off"
+          \`\`\`
+
+          ## Rollback
+
+          Flash your previous working boot image / full stock firmware via Odin (AP + CSC, HOME_CSC to keep data).
+
+          ## Notes
+
+          - Kernel modules already present on \`/vendor\` keep working (\`CONFIG_MODVERSIONS=y\`).
+          - \`CONFIG_MODULE_SIG_PROTECT\` is disabled, matching the previous working build.
+          - Verify with \`uname -r\` → \`${KERNEL_RELEASE}\`.
+          EOF
+
+          ( cd "$REL" && find . -maxdepth 2 -type f ! -name 'SHA256SUMS' -print0 \
+              | sort -z | xargs -0 sha256sum > SHA256SUMS )
+
+          echo "=== Package contents ==="
+          find "$REL" -maxdepth 2 -type f -printf '%10s  %p\n' | sort -k2
+
+      - name: Upload build artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: A145P-Kernel-Image-Only
-          path: final_kernel/*
+          name: A145P-Kernel-v${{ env.VERSION }}
+          path: |
+            release/**
+            build.log
+          if-no-files-found: warn
+          include-hidden-files: true
+          compression-level: 6
+
+      - name: Publish GitHub release (draft)
+        if: success() && (startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          name: A145P Kernel ${{ env.VERSION }}
+          body_path: release/A145P-Kernel-v${{ env.VERSION }}/RELEASE_NOTES.md
+          files: |
+            release/A145P-Kernel-v${{ env.VERSION }}/A145P-Kernel-v${{ env.VERSION }}-boot.img
+            release/A145P-Kernel-v${{ env.VERSION }}/A145P-Kernel-v${{ env.VERSION }}-Odin.tar.md5
+            release/A145P-Kernel-v${{ env.VERSION }}/A145P-BatteryCare-v1.0.zip
+            release/A145P-Kernel-v${{ env.VERSION }}/RELEASE_NOTES.md
+            release/A145P-Kernel-v${{ env.VERSION }}/build-info.txt
+            release/A145P-Kernel-v${{ env.VERSION }}/SHA256SUMS
+            release/A145P-Kernel-v${{ env.VERSION }}/images/Image
+            release/A145P-Kernel-v${{ env.VERSION }}/images/Image.gz
+            release/A145P-Kernel-v${{ env.VERSION }}/images/System.map
+            release/A145P-Kernel-v${{ env.VERSION }}/images/config
+          draft: true
+          prerelease: false
+          fail_on_unmatched_files: true
