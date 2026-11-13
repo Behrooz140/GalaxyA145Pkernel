@@ -6,7 +6,7 @@ kernel or override thermal/voltage limits.
 
 ## Install
 
-Install `A145P-Tuner-v1.3.zip` from the KernelSU manager and reboot.
+Install `A145P-Tuner-v1.4-oc.zip` from the KernelSU manager and reboot.
 
 The module runs after boot and applies the `balanced` profile by default.
 A second apply happens 30 seconds later in case a framework service rewrites

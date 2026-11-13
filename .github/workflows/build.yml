@@ -25,13 +25,13 @@ env:
   # Base firmware release must stay identical to stock so the vermagic stamp
   # matches the prebuilt /vendor modules. The user-visible release string adds
   # the "behi" branding at the end:
-  # 6.6.92-android15-8-abA145PXXSDDZH1-4k-behi-v1.3
+  # 6.6.92-android15-8-abA145PXXSDDZH1-4k-behi-v1.4-oc
   # When bumping the version, update CONFIG_LOCALVERSION in
   # kernel-6.6/arch/arm64/configs/gki_defconfig as well.
   BUILD_NUMBER: A145PXXSDDZH1
-  EXPECTED_KERNEL_RELEASE: 6.6.92-android15-8-abA145PXXSDDZH1-4k-behi-v1.3
+  EXPECTED_KERNEL_RELEASE: 6.6.92-android15-8-abA145PXXSDDZH1-4k-behi-v1.4-oc
   STOCK_VERMAGIC: '6.6.92-android15-8-abA145PXXSDDZH1-4k SMP preempt mod_unload modversions aarch64'
-  BRAND_SUFFIX: '-behi-v1.3'
+  BRAND_SUFFIX: '-behi-v1.4-oc'
   KSU_TAG: v3.3.1
   KSU_COMMIT: 0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d
   KSU_COMMITS: '2680'
@@ -323,9 +323,21 @@ jobs:
           done
           grep -q "^# CONFIG_MODULE_SIG_PROTECT is not set" "$KCONFIG" || {
             echo "ERROR: CONFIG_MODULE_SIG_PROTECT must stay disabled"; exit 1; }
-          grep -q '^CONFIG_LOCALVERSION="-4k-behi-v1.3"' "$KCONFIG" || {
-            echo "ERROR: CONFIG_LOCALVERSION must be -4k-behi-v1.3"; exit 1; }
-          echo "KSU/SYSVIPC/namespaces enabled; SIG_PROTECT off; LOCALVERSION=-4k-behi-v1.3"
+          grep -q '^CONFIG_LOCALVERSION="-4k-behi-v1.4-oc"' "$KCONFIG" || {
+            echo "ERROR: CONFIG_LOCALVERSION must be -4k-behi-v1.4-oc"; exit 1; }
+          echo "KSU/SYSVIPC/namespaces enabled; SIG_PROTECT off; LOCALVERSION=-4k-behi-v1.4-oc"
+
+          echo "=== Overclock table check (v1.4-oc) ==="
+          OC_TABLE="kernel/kernel_device_modules-6.6/drivers/misc/mediatek/cpufreq_v2/src/plat_k68/mtk_cpufreq_opp_table.h"
+          grep -Eq '^#define CPU_DVFS_FREQ0_LL_G75[[:space:]]+1900000' "$OC_TABLE" || {
+            echo "ERROR: G75 little top OPP is not 1.9 GHz"; exit 1; }
+          grep -Eq '^#define CPU_DVFS_FREQ0_L_G75[[:space:]]+2100000' "$OC_TABLE" || {
+            echo "ERROR: G75 big top OPP is not 2.1 GHz"; exit 1; }
+          grep -Eq '^#define CPU_DVFS_VOLT0_VPROC1_G75[[:space:]]+103125' "$OC_TABLE" || {
+            echo "ERROR: G75 little top OPP voltage is not 1.03125 V"; exit 1; }
+          grep -Eq '^#define CPU_DVFS_VOLT0_VPROC2_G75[[:space:]]+111250' "$OC_TABLE" || {
+            echo "ERROR: G75 big top OPP voltage is not 1.1125 V"; exit 1; }
+          echo "G75 OC table: little 1.9 GHz @ 1.03125 V, big 2.1 GHz @ 1.1125 V"
 
           echo "=== Advanced feature sanity check ==="
           for opt in \
@@ -455,7 +467,7 @@ jobs:
           {
             echo "Kernel release : ${KERNEL_RELEASE}"
             echo "Package version: ${VERSION}"
-            echo "Variant        : behi v1.3 (a145p_advanced.config + A145P Tuner)"
+            echo "Variant        : behi v1.4-oc (G75 overclock, a145p_advanced.config + A145P Tuner)"
             echo "Built at (UTC)  : $(date -u '+%Y-%m-%d %H:%M:%S')"
             echo "Source commit   : ${FULL_SHA}"
             echo "Source date     : $(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S') (SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH})"
@@ -483,6 +495,7 @@ jobs:
           - \`A145P-Kernel-v${VERSION}-boot.img\` — 32 MiB boot image (header v4, AVB test-key signed)
           - \`A145P-Kernel-v${VERSION}-Odin.tar.md5\` — Odin AP slot package containing \`boot.img\`
           - \`images/Image\`, \`images/Image.gz\`, \`images/System.map\`, \`images/.config\`
+            (the release asset named \`default.config\` is the same file as \`images/.config\`)
           - \`A145P-BatteryCare-v1.0.zip\` — KernelSU module for charge limiting (50–100 %)
           - \`A145P-Tuner-v${VERSION}.zip\` — KernelSU module with balanced/performance/battery profiles
           - \`build-info.txt\`, \`SHA256SUMS\`
@@ -500,6 +513,36 @@ jobs:
             (no \`.ko\` files are shipped, so USB-serial adapters need a module build)
           - Kernel stack offset randomization
           - ABI guard: exported symbol CRCs are compared with v1.0 on every build
+          - **Experimental CPU overclock** (CPU level 6 / G75 table only):
+            big cluster 2.0 → 2.1 GHz, little cluster 1.8 → 1.9 GHz, +25 mV
+
+          ## Experimental CPU overclock (v1.4-oc)
+
+          This build is an experiment, not a daily-driver recommendation. Only the
+          top OPP of the G75 table (CPU level 6, the table the SM-A145P uses) is
+          raised:
+
+          | Cluster | Before | After | Vproc before | Vproc after |
+          |---|---|---|---|---|
+          | little (6 cores) | 1.8 GHz | 1.9 GHz | 1.00625 V | 1.03125 V |
+          | big (2 cores) | 2.0 GHz | 2.1 GHz | 1.0875 V | 1.1125 V |
+
+          Thermal throttling and all lower OPPs are untouched, so the kernel can
+          still fall back under load. The new voltage stays below the PMIC limit
+          enforced by `MAX_VPROC_VOLT` (1.12 V).
+
+          Check the applied limits after boot:
+
+          \`\`\`sh
+          su -c 'grep . /sys/devices/system/cpu/cpufreq/policy*/cpuinfo_max_freq'
+          \`\`\`
+
+          Expected: \`policy0 = 1900000\`, \`policy6 = 2100000\`.
+
+          If the device bootloops, overheats or apps crash, flash the v1.3
+          \`boot.img\` to return to stock clocks. Overclocking is inherently
+          silicon-dependent; not every MT6769V unit will be stable at these
+          frequencies.
 
           ## Branding
 
@@ -571,8 +614,16 @@ jobs:
           - Verify with \`uname -r\` → \`${KERNEL_RELEASE}\`.
           EOF
 
-          ( cd "$REL" && find . -maxdepth 2 -type f ! -name 'SHA256SUMS' -print0 \
-              | sort -z | xargs -0 sha256sum > SHA256SUMS )
+          # Emit flat names: GitHub releases flatten the images/ directory, so a
+          # checksum file that says "./images/Image" cannot be checked directly
+          # against the downloaded assets. .config is skipped because the release
+          # action publishes it under the fallback name "default.config"; its
+          # hash is identical to config, which is listed.
+          ( cd "$REL" && {
+              find . -maxdepth 1 -type f ! -name 'SHA256SUMS' -print0
+              find ./images -maxdepth 1 -type f ! -name '.config' -print0
+            } | sort -z | xargs -0 sha256sum \
+              | sed -E 's#  \./images/#  #; s#  \./#  #' > SHA256SUMS )
 
           echo "=== Package contents ==="
           find "$REL" -maxdepth 2 -type f -printf '%10s  %p\n' | sort -k2

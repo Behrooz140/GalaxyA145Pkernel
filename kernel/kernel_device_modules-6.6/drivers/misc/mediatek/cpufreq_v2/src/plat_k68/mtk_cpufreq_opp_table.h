@@ -661,8 +661,19 @@
 #define CPU_DVFS_VOLT15_VPROC3_PRO_v7	 65000		/* 10uV */
 
 /* G75 */
+/*
+ * Experimental overclock (A145P "behi" v1.4-oc).
+ *
+ * The Galaxy A14 (SM-A145P, MT6769V) reports CPU level 6 and therefore uses
+ * this G75 table. The top OPP of each cluster is raised by 100 MHz:
+ *   little (LL, 6 cores): 1800 -> 1900 MHz
+ *   big    (L,  2 cores): 2000 -> 2100 MHz
+ * with +25 mV on the matching Vproc rail, staying below MAX_VPROC_VOLT
+ * (1.12 V). Higher steps stay untouched so thermal throttling still has
+ * valid lower OPPs to fall back to.
+ */
 /* for DVFS OPP table L */
-#define CPU_DVFS_FREQ0_LL_G75		1800000		/* KHz */
+#define CPU_DVFS_FREQ0_LL_G75		1900000		/* KHz (OC, was 1800000) */
 #define CPU_DVFS_FREQ1_LL_G75		1625000		/* KHz */
 #define CPU_DVFS_FREQ2_LL_G75		1500000		/* KHz */
 #define CPU_DVFS_FREQ3_LL_G75		1450000		/* KHz */
@@ -680,7 +691,7 @@
 #define CPU_DVFS_FREQ15_LL_G75		500000		/* KHz */
 
 /* for DVFS OPP table B */
-#define CPU_DVFS_FREQ0_L_G75		2000000		/* KHz */
+#define CPU_DVFS_FREQ0_L_G75		2100000		/* KHz (OC, was 2000000) */
 #define CPU_DVFS_FREQ1_L_G75		1950000		/* KHz */
 #define CPU_DVFS_FREQ2_L_G75		1900000		/* KHz */
 #define CPU_DVFS_FREQ3_L_G75		1850000		/* KHz */
@@ -716,7 +727,7 @@
 #define CPU_DVFS_FREQ15_CCI_G75	        500000		/* KHz */
 
 /* for DVFS OPP table L */
-#define CPU_DVFS_VOLT0_VPROC1_G75	100625		/* 10uV */
+#define CPU_DVFS_VOLT0_VPROC1_G75	103125		/* 10uV (OC, was 100625) */
 #define CPU_DVFS_VOLT1_VPROC1_G75	 93125		/* 10uV */
 #define CPU_DVFS_VOLT2_VPROC1_G75	 89375		/* 10uV */
 #define CPU_DVFS_VOLT3_VPROC1_G75	 88125		/* 10uV */
@@ -734,7 +745,7 @@
 #define CPU_DVFS_VOLT15_VPROC1_G75	 65000		/* 10uV */
 
 /* for DVFS OPP table B */
-#define CPU_DVFS_VOLT0_VPROC2_G75	108750		/* 10uV */
+#define CPU_DVFS_VOLT0_VPROC2_G75	111250		/* 10uV (OC, was 108750) */
 #define CPU_DVFS_VOLT1_VPROC2_G75	107500		/* 10uV */
 #define CPU_DVFS_VOLT2_VPROC2_G75	106250		/* 10uV */
 #define CPU_DVFS_VOLT3_VPROC2_G75	105000		/* 10uV */
