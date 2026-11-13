@@ -256,7 +256,7 @@ jobs:
           export BUILD_CONFIG="../out/target/product/a14m/obj/KERNEL_OBJ/build.config"
           export OUT_DIR="../out/target/product/a14m/obj/KLEAF_OBJ"
           export DIST_DIR="../out/target/product/a14m/obj/KLEAF_OBJ/dist"
-          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config"
+          export DEFCONFIG_OVERLAYS="mt6768_overlay.config o22.config a145p_advanced.config"
           export PROJECT="mgk_64_k66"
           export MODE="user"
 
