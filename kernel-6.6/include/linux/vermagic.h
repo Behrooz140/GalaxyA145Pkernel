@@ -39,11 +39,25 @@
 #define MODULE_RANDSTRUCT
 #endif
 
-#define VERMAGIC_STRING 						\
-	UTS_RELEASE " "							\
-	MODULE_VERMAGIC_SMP MODULE_VERMAGIC_PREEMPT 			\
-	MODULE_VERMAGIC_MODULE_UNLOAD MODULE_VERMAGIC_MODVERSIONS	\
-	MODULE_ARCH_VERMAGIC						\
-	MODULE_RANDSTRUCT
+/*
+ * A145P "behi" kernel: the UTS release string is branded (see
+ * CONFIG_LOCALVERSION in gki_defconfig) so Settings / uname show the custom
+ * kernel name and version.
+ *
+ * The vermagic stamp is part of the module load ABI: every stock module in
+ * /vendor/lib/modules was linked against the stock release string. Keep
+ * it pinned to the exact stock value, otherwise all vendor modules are
+ * rejected at load time (the v1.1 bootloop class of failure). The value below
+ * must match the stock firmware exactly:
+ *
+ *   <UTS_RELEASE> SMP preempt mod_unload modversions aarch64
+ *
+ * CI verifies that this string is present in the built Image, and the KMI gate
+ * keeps the exported symbol CRCs identical to v1.0.
+ */
+#define A145P_STOCK_VERMAGIC \
+	"6.6.92-android15-8-abA145PXXSDDZH1-4k SMP preempt mod_unload modversions aarch64"
+
+#define VERMAGIC_STRING A145P_STOCK_VERMAGIC
 
 #endif /* _LINUX_VERMAGIC_H */

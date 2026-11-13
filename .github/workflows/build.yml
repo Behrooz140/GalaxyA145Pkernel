@@ -22,10 +22,16 @@ env:
   DEVICE_MODULES_DIR: kernel_device_modules-6.6
   PROJECT: mgk_64_k66
   MODE: user
-  # Must stay identical to the stock firmware so vermagic matches:
-  # 6.6.92-android15-8-abA145PXXSDDZH1-4k
+  # Base firmware release must stay identical to stock so the vermagic stamp
+  # matches the prebuilt /vendor modules. The user-visible release string adds
+  # the "behi" branding at the end:
+  # 6.6.92-android15-8-abA145PXXSDDZH1-4k-behi-v1.3
+  # When bumping the version, update CONFIG_LOCALVERSION in
+  # kernel-6.6/arch/arm64/configs/gki_defconfig as well.
   BUILD_NUMBER: A145PXXSDDZH1
-  EXPECTED_KERNEL_RELEASE: 6.6.92-android15-8-abA145PXXSDDZH1-4k
+  EXPECTED_KERNEL_RELEASE: 6.6.92-android15-8-abA145PXXSDDZH1-4k-behi-v1.3
+  STOCK_VERMAGIC: '6.6.92-android15-8-abA145PXXSDDZH1-4k SMP preempt mod_unload modversions aarch64'
+  BRAND_SUFFIX: '-behi-v1.3'
   KSU_TAG: v3.3.1
   KSU_COMMIT: 0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d
   KSU_COMMITS: '2680'
@@ -317,9 +323,9 @@ jobs:
           done
           grep -q "^# CONFIG_MODULE_SIG_PROTECT is not set" "$KCONFIG" || {
             echo "ERROR: CONFIG_MODULE_SIG_PROTECT must stay disabled"; exit 1; }
-          grep -q '^CONFIG_LOCALVERSION="-4k"' "$KCONFIG" || {
-            echo "ERROR: CONFIG_LOCALVERSION must be -4k"; exit 1; }
-          echo "KSU/SYSVIPC/namespaces enabled; SIG_PROTECT off; LOCALVERSION=-4k"
+          grep -q '^CONFIG_LOCALVERSION="-4k-behi-v1.3"' "$KCONFIG" || {
+            echo "ERROR: CONFIG_LOCALVERSION must be -4k-behi-v1.3"; exit 1; }
+          echo "KSU/SYSVIPC/namespaces enabled; SIG_PROTECT off; LOCALVERSION=-4k-behi-v1.3"
 
           echo "=== Advanced feature sanity check ==="
           for opt in \
@@ -366,6 +372,20 @@ jobs:
             strings "$IMAGE" | grep -m3 '^Linux version' || true
             exit 1
           fi
+          case "$KERNEL_RELEASE" in
+            *"${BRAND_SUFFIX}") echo "Branding suffix present: ${BRAND_SUFFIX}" ;;
+            *) echo "ERROR: kernel release is not branded with ${BRAND_SUFFIX}"; exit 1 ;;
+          esac
+
+          # The module ABI stamp must stay byte-identical to stock even though
+          # the visible release string is branded; otherwise every prebuilt
+          # /vendor module refuses to load (v1.1 regression).
+          if ! strings "$IMAGE" | grep -qF "$STOCK_VERMAGIC"; then
+            echo "ERROR: stock vermagic string not found in Image"
+            strings "$IMAGE" | grep -m3 'SMP preempt' || true
+            exit 1
+          fi
+          echo "Stock vermagic pinned: $STOCK_VERMAGIC"
 
           REL="release/A145P-Kernel-v${VERSION}"
           mkdir -p "$REL/images"
@@ -435,7 +455,7 @@ jobs:
           {
             echo "Kernel release : ${KERNEL_RELEASE}"
             echo "Package version: ${VERSION}"
-            echo "Variant        : advanced v1.2 (a145p_advanced.config + A145P Tuner)"
+            echo "Variant        : behi v1.3 (a145p_advanced.config + A145P Tuner)"
             echo "Built at (UTC)  : $(date -u '+%Y-%m-%d %H:%M:%S')"
             echo "Source commit   : ${FULL_SHA}"
             echo "Source date     : $(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S') (SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH})"
@@ -452,7 +472,7 @@ jobs:
           } | tee "$REL/build-info.txt"
 
           cat > "$REL/RELEASE_NOTES.md" <<EOF
-          # Galaxy A14 (SM-A145P) custom kernel ${VERSION}
+          # Galaxy A14 (SM-A145P) behi custom kernel ${VERSION}
 
           Kernel release: \`${KERNEL_RELEASE}\`
           Base firmware: \`A145PXXSDDZH1\`
@@ -480,6 +500,21 @@ jobs:
             (no \`.ko\` files are shipped, so USB-serial adapters need a module build)
           - Kernel stack offset randomization
           - ABI guard: exported symbol CRCs are compared with v1.0 on every build
+
+          ## Branding
+
+          The release string carries the \`behi\` name and the package version, so
+          Settings → About phone → Software information → Kernel version and
+          \`uname -r\` show:
+
+          \`\`\`
+          6.6.92-android15-8-abA145PXXSDDZH1-4k-behi-v${VERSION}
+          \`\`\`
+
+          The module ABI stamp (vermagic) is deliberately pinned to the stock
+          value \`6.6.92-android15-8-abA145PXXSDDZH1-4k SMP preempt mod_unload
+          modversions aarch64\`, so the prebuilt modules in \`/vendor/lib/modules\`
+          keep loading. Only the displayed release string changed.
 
           ## Requirements
 
@@ -562,7 +597,7 @@ jobs:
           # Create the tag on the exact commit that was built, not on the
           # repository default branch.
           target_commitish: ${{ github.sha }}
-          name: A145P Kernel ${{ steps.meta.outputs.version }}
+          name: A145P behi Kernel ${{ steps.meta.outputs.version }}
           body_path: release/A145P-Kernel-v${{ steps.meta.outputs.version }}/RELEASE_NOTES.md
           files: |
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-Kernel-v${{ steps.meta.outputs.version }}-boot.img
