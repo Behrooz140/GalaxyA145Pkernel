@@ -260,17 +260,6 @@ jobs:
           export PROJECT="mgk_64_k66"
           export MODE="user"
 
-          # a145p_advanced.config makes CONFIG_USB_SERIAL built-in so the
-          # usbserial core is always available without shipping .ko files.
-          # GKI's module_outs still lists drivers/usb/serial/usbserial.ko,
-          # and Kleaf fails when a declared module is not produced. Drop only
-          # that entry; ftdi_sio keeps building as a module.
-          sed -i '\#^[[:space:]]*"drivers/usb/serial/usbserial\.ko",#d' kernel-6.6/modules.bzl
-          if grep -q 'usbserial\.ko' kernel-6.6/modules.bzl; then
-            echo "ERROR: usbserial.ko still present in modules.bzl"; exit 1
-          fi
-          echo "modules.bzl: usbserial.ko removed from module_outs (built-in)"
-
           python3 "${DEVICE_MODULES_DIR}/scripts/gen_build_config.py" \
             --kernel-defconfig mediatek-bazel_defconfig \
             --kernel-defconfig-overlays "mt6768_overlay.config o22.config a145p_advanced.config" \
@@ -334,20 +323,41 @@ jobs:
 
           echo "=== Advanced feature sanity check ==="
           for opt in \
-            CONFIG_NF_TABLES CONFIG_NF_TABLES_INET CONFIG_NFT_NAT CONFIG_NFT_TPROXY \
-            CONFIG_NET_SCH_CAKE CONFIG_MACVLAN CONFIG_IPVLAN CONFIG_VXLAN \
+            CONFIG_NET_SCH_CAKE CONFIG_MACVLAN \
             CONFIG_IP_NF_TARGET_TTL CONFIG_NETFILTER_XT_TARGET_HL CONFIG_IP6_NF_TARGET_HL \
-            CONFIG_NETFILTER_XT_MATCH_CONNLABEL CONFIG_NETFILTER_XT_MATCH_CPU \
-            CONFIG_NETFILTER_XT_TARGET_CHECKSUM \
+            CONFIG_NETFILTER_XT_MATCH_CPU CONFIG_NETFILTER_XT_TARGET_CHECKSUM \
             CONFIG_SQUASHFS CONFIG_SQUASHFS_XZ CONFIG_SQUASHFS_LZ4 CONFIG_SQUASHFS_ZSTD \
             CONFIG_NFS_FS CONFIG_NFS_V4 CONFIG_NFS_V4_1 CONFIG_NFS_V4_2 CONFIG_CIFS \
-            CONFIG_USB_SERIAL CONFIG_USB_SERIAL_CH341 CONFIG_USB_SERIAL_CP210X \
-            CONFIG_USB_SERIAL_PL2303 CONFIG_USB_SERIAL_OPTION \
-            CONFIG_INPUT_JOYDEV CONFIG_KSM CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT ; do
+            CONFIG_INPUT_JOYDEV CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT ; do
             grep -q "^${opt}=y" "$KCONFIG" || {
               echo "ERROR: ${opt} is not enabled in $KCONFIG"; exit 1; }
           done
-          echo "Advanced v1.1 config options present"
+          # USB serial stays a module exactly like the stock firmware (v1.0
+          # booted with =m); the release does not ship .ko files.
+          grep -q '^CONFIG_USB_SERIAL=m' "$KCONFIG" || {
+            echo "ERROR: CONFIG_USB_SERIAL must stay =m (stock value)"; exit 1; }
+          # KMI guard: these options changed the layout of exported GKI
+          # structures in v1.1 and changed ~10k symbol CRCs, so every stock
+          # /vendor module was rejected ("disagrees about version of symbol
+          # module_layout") and the device bootlooped. Keep them off.
+          for opt in \
+            CONFIG_NF_TABLES CONFIG_NF_TABLES_INET CONFIG_NF_TABLES_IPV4 \
+            CONFIG_NF_TABLES_IPV6 CONFIG_NF_TABLES_ARP CONFIG_NF_TABLES_NETDEV \
+            CONFIG_NF_TABLES_BRIDGE CONFIG_NFT_NAT CONFIG_NFT_TPROXY \
+            CONFIG_NETFILTER_XT_MATCH_CONNLABEL CONFIG_NF_CONNTRACK_LABELS \
+            CONFIG_KSM CONFIG_VXLAN CONFIG_IPVLAN CONFIG_NET_L3_MASTER_DEV \
+            CONFIG_LRU_GEN ; do
+            if grep -q "^${opt}=" "$KCONFIG"; then
+              echo "ERROR: ${opt} is enabled but it breaks the exported GKI ABI"; exit 1
+            fi
+          done
+          echo "Advanced v1.2 config options present; KMI breakers disabled"
+
+          echo "=== KMI compatibility gate ==="
+          python3 scripts/kmi_check.py verify \
+            --image "$IMAGE" \
+            --system-map "$SYSTEM_MAP" \
+            --baseline configs/kmi-baseline-v1.0.txt
 
           KERNEL_RELEASE="$(strings "$IMAGE" | sed -n 's/^Linux version \([^ ]*\) .*/\1/p' | head -n1)"
           echo "Detected kernel release: $KERNEL_RELEASE"
@@ -425,7 +435,7 @@ jobs:
           {
             echo "Kernel release : ${KERNEL_RELEASE}"
             echo "Package version: ${VERSION}"
-            echo "Variant        : advanced v1.1 (a145p_advanced.config + A145P Tuner)"
+            echo "Variant        : advanced v1.2 (a145p_advanced.config + A145P Tuner)"
             echo "Built at (UTC)  : $(date -u '+%Y-%m-%d %H:%M:%S')"
             echo "Source commit   : ${FULL_SHA}"
             echo "Source date     : $(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S') (SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH})"
@@ -463,12 +473,13 @@ jobs:
           - SYSVIPC / POSIX mqueue / IPC + PID + USER namespaces (Droidspaces-ready)
           - TMPFS POSIX ACL/XATTR, netfilter/ipset additions
           - Battery Care support (Samsung \`batt_full_capacity\` interface)
-          - nftables (inet/ip/ip6/arp/bridge) + NAT + TPROXY
-          - CAKE qdisc, MACVLAN/IPVLAN/VXLAN for containers
-          - TTL/HL target for tethering, connlabel/cpu/checksum xtables helpers
+          - CAKE qdisc, MACVLAN for containers (Droidspaces)
+          - TTL/HL targets for tethering, cpu/checksum xtables helpers
           - SquashFS (XZ/LZ4/ZSTD), NFSv4.2, SMB/CIFS
-          - USB serial (CH341, CP210x, PL2303, GSM/CDMA modems)
-          - KSM (compiled in, inactive by default), kernel stack offset randomization
+          - USB serial core kept as a module exactly like the stock firmware
+            (no \`.ko\` files are shipped, so USB-serial adapters need a module build)
+          - Kernel stack offset randomization
+          - ABI guard: exported symbol CRCs are compared with v1.0 on every build
 
           ## Requirements
 
@@ -519,7 +530,8 @@ jobs:
 
           ## Notes
 
-          - Kernel modules already present on \`/vendor\` keep working (\`CONFIG_MODVERSIONS=y\`).
+          - Kernel modules already present on \`/vendor\` keep working: every exported
+            symbol CRC is verified against the known-good v1.0 build (\`CONFIG_MODVERSIONS=y\`).
           - \`CONFIG_MODULE_SIG_PROTECT\` is disabled, matching the previous working build.
           - Verify with \`uname -r\` → \`${KERNEL_RELEASE}\`.
           EOF
