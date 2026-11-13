@@ -1,0 +1,203 @@
+#!/system/bin/sh
+# A145P Tuner CLI
+#
+#   a145p-tuner status
+#   a145p-tuner apply
+#   a145p-tuner profile balanced|performance|battery
+#
+# Profiles only write standard sysfs/procfs tunables. Every write is checked
+# and logged; missing nodes are skipped, so the same CLI works on kernels that
+# do not expose a particular knob.
+
+DATA=/data/adb/a145p-tuner
+CONF="$DATA/config"
+LOG="$DATA/tuner.log"
+DEFAULT_PROFILE=balanced
+
+mkdir -p "$DATA" 2>/dev/null
+
+log() {
+    if [ -f "$LOG" ]; then
+        _sz=$(wc -c < "$LOG" 2>/dev/null)
+        if [ -n "$_sz" ] && [ "$_sz" -gt 262144 ] 2>/dev/null; then
+            mv -f "$LOG" "$LOG.1"
+        fi
+    fi
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG" 2>/dev/null
+}
+
+w() {
+    _p="$1"
+    _v="$2"
+    [ -e "$_p" ] || return 0
+    if echo "$_v" > "$_p" 2>/dev/null; then
+        log "set $_p=$_v"
+    else
+        log "FAIL $_p=$_v"
+    fi
+}
+
+w_glob() {
+    _g="$1"
+    _v="$2"
+    for _f in $_g; do
+        [ -e "$_f" ] && w "$_f" "$_v"
+    done
+}
+
+load_conf() {
+    PROFILE="$DEFAULT_PROFILE"
+    [ -f "$CONF" ] && . "$CONF"
+    [ -n "${PROFILE:-}" ] || PROFILE="$DEFAULT_PROFILE"
+}
+
+apply_balanced() {
+    # network
+    w /proc/sys/net/ipv4/tcp_congestion_control bbr
+    w /proc/sys/net/core/default_qdisc fq
+    w /proc/sys/net/ipv4/tcp_fastopen 3
+    w /proc/sys/net/ipv4/tcp_mtu_probing 1
+    # VM / filesystem cache
+    w /proc/sys/vm/swappiness 80
+    w /proc/sys/vm/vfs_cache_pressure 100
+    w /proc/sys/vm/dirty_ratio 20
+    w /proc/sys/vm/dirty_background_ratio 5
+    w /proc/sys/fs/inotify/max_user_watches 524288
+    # block layer
+    w_glob '/sys/block/*/queue/read_ahead_kb' 128
+    w_glob '/sys/block/*/queue/iostats' 0
+    w_glob '/sys/block/*/queue/nr_requests' 128
+    # scheduler rate limits (if exposed by schedutil)
+    w_glob '/sys/devices/system/cpu/cpufreq/policy*/schedutil/up_rate_limit_us' 1000
+    w_glob '/sys/devices/system/cpu/cpufreq/policy*/schedutil/down_rate_limit_us' 2000
+    w_glob '/sys/devices/system/cpu/cpu*/cpufreq/schedutil/up_rate_limit_us' 1000
+    w_glob '/sys/devices/system/cpu/cpu*/cpufreq/schedutil/down_rate_limit_us' 2000
+}
+
+apply_performance() {
+    # network: larger buffers and fast open
+    w /proc/sys/net/ipv4/tcp_congestion_control bbr
+    w /proc/sys/net/core/default_qdisc fq
+    w /proc/sys/net/ipv4/tcp_fastopen 3
+    w /proc/sys/net/ipv4/tcp_mtu_probing 1
+    w /proc/sys/net/core/rmem_max 8388608
+    w /proc/sys/net/core/wmem_max 8388608
+    w /proc/sys/net/ipv4/tcp_rmem '4096 87380 8388608'
+    w /proc/sys/net/ipv4/tcp_wmem '4096 65536 8388608'
+    # VM: keep caches, swap less
+    w /proc/sys/vm/swappiness 60
+    w /proc/sys/vm/vfs_cache_pressure 50
+    w /proc/sys/vm/dirty_ratio 30
+    w /proc/sys/vm/dirty_background_ratio 10
+    w /proc/sys/fs/inotify/max_user_watches 524288
+    # block layer
+    w_glob '/sys/block/*/queue/read_ahead_kb' 256
+    w_glob '/sys/block/*/queue/iostats' 0
+    w_glob '/sys/block/*/queue/nr_requests' 256
+    # scheduler: react faster
+    w_glob '/sys/devices/system/cpu/cpufreq/policy*/schedutil/up_rate_limit_us' 500
+    w_glob '/sys/devices/system/cpu/cpufreq/policy*/schedutil/down_rate_limit_us' 1000
+    w_glob '/sys/devices/system/cpu/cpu*/cpufreq/schedutil/up_rate_limit_us' 500
+    w_glob '/sys/devices/system/cpu/cpu*/cpufreq/schedutil/down_rate_limit_us' 1000
+}
+
+apply_battery() {
+    # network: keep BBR/fq but skip large buffers
+    w /proc/sys/net/ipv4/tcp_congestion_control bbr
+    w /proc/sys/net/core/default_qdisc fq
+    w /proc/sys/net/ipv4/tcp_fastopen 3
+    w /proc/sys/net/ipv4/tcp_mtu_probing 1
+    # VM: prefer reclaim over swap, write back less often
+    w /proc/sys/vm/swappiness 60
+    w /proc/sys/vm/vfs_cache_pressure 200
+    w /proc/sys/vm/dirty_ratio 15
+    w /proc/sys/vm/dirty_background_ratio 5
+    w /proc/sys/vm/dirty_writeback_centisecs 3000
+    w /proc/sys/vm/dirty_expire_centisecs 6000
+    w /proc/sys/fs/inotify/max_user_watches 131072
+    # block layer
+    w_glob '/sys/block/*/queue/read_ahead_kb' 64
+    w_glob '/sys/block/*/queue/iostats' 0
+    w_glob '/sys/block/*/queue/nr_requests' 64
+    # scheduler: react slower to save power
+    w_glob '/sys/devices/system/cpu/cpufreq/policy*/schedutil/up_rate_limit_us' 2000
+    w_glob '/sys/devices/system/cpu/cpufreq/policy*/schedutil/down_rate_limit_us' 4000
+    w_glob '/sys/devices/system/cpu/cpu*/cpufreq/schedutil/up_rate_limit_us' 2000
+    w_glob '/sys/devices/system/cpu/cpu*/cpufreq/schedutil/down_rate_limit_us' 4000
+}
+
+apply_profile() {
+    case "$PROFILE" in
+        balanced) apply_balanced ;;
+        performance) apply_performance ;;
+        battery) apply_battery ;;
+        *)
+            echo "ERROR: unknown profile '$PROFILE' (use balanced, performance or battery)"
+            return 1
+            ;;
+    esac
+}
+
+show_status() {
+    load_conf
+    echo "A145P Tuner"
+    echo "config : $CONF"
+    echo "profile: $PROFILE"
+    echo "log    : $LOG"
+    echo
+    for p in \
+        /proc/sys/net/ipv4/tcp_congestion_control \
+        /proc/sys/net/core/default_qdisc \
+        /proc/sys/net/ipv4/tcp_fastopen \
+        /proc/sys/net/ipv4/tcp_mtu_probing \
+        /proc/sys/vm/swappiness \
+        /proc/sys/vm/vfs_cache_pressure \
+        /proc/sys/vm/dirty_ratio \
+        /proc/sys/vm/dirty_background_ratio \
+        /proc/sys/fs/inotify/max_user_watches ; do
+        [ -e "$p" ] && printf '%-45s %s\n' "${p##*/}" "$(cat "$p" 2>/dev/null)"
+    done
+    for p in /sys/block/*/queue/read_ahead_kb ; do
+        [ -e "$p" ] && printf '%-45s %s\n' "${p#/sys/block/}" "$(cat "$p" 2>/dev/null)"
+    done
+}
+
+usage() {
+    echo "usage: a145p-tuner {status | apply | profile balanced|performance|battery}"
+}
+
+load_conf
+
+case "${1:-}" in
+    status)
+        show_status
+        ;;
+    apply)
+        log "apply START profile=$PROFILE"
+        apply_profile
+        log "apply DONE profile=$PROFILE"
+        echo "applied profile: $PROFILE (see $LOG)"
+        ;;
+    profile)
+        case "${2:-}" in
+            balanced|performance|battery)
+                mkdir -p "$DATA"
+                echo "PROFILE=$2" > "$CONF"
+                PROFILE="$2"
+                log "profile set to $PROFILE"
+                apply_profile
+                echo "profile set to $PROFILE and applied"
+                ;;
+            *)
+                echo "ERROR: profile must be balanced, performance or battery"
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac
+
+exit 0

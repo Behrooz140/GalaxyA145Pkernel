@@ -262,7 +262,7 @@ jobs:
 
           python3 "${DEVICE_MODULES_DIR}/scripts/gen_build_config.py" \
             --kernel-defconfig mediatek-bazel_defconfig \
-            --kernel-defconfig-overlays "mt6768_overlay.config o22.config" \
+            --kernel-defconfig-overlays "mt6768_overlay.config o22.config a145p_advanced.config" \
             --kernel-build-config-overlays "" \
             -m user -o "${BUILD_CONFIG}"
 
@@ -320,6 +320,23 @@ jobs:
           grep -q '^CONFIG_LOCALVERSION="-4k"' "$KCONFIG" || {
             echo "ERROR: CONFIG_LOCALVERSION must be -4k"; exit 1; }
           echo "KSU/SYSVIPC/namespaces enabled; SIG_PROTECT off; LOCALVERSION=-4k"
+
+          echo "=== Advanced feature sanity check ==="
+          for opt in \
+            CONFIG_NF_TABLES CONFIG_NF_TABLES_INET CONFIG_NFT_NAT CONFIG_NFT_TPROXY \
+            CONFIG_NET_SCH_CAKE CONFIG_MACVLAN CONFIG_IPVLAN CONFIG_VXLAN \
+            CONFIG_IP_NF_TARGET_TTL CONFIG_NETFILTER_XT_TARGET_HL CONFIG_IP6_NF_TARGET_HL \
+            CONFIG_NETFILTER_XT_MATCH_CONNLABEL CONFIG_NETFILTER_XT_MATCH_CPU \
+            CONFIG_NETFILTER_XT_TARGET_CHECKSUM \
+            CONFIG_SQUASHFS CONFIG_SQUASHFS_XZ CONFIG_SQUASHFS_LZ4 CONFIG_SQUASHFS_ZSTD \
+            CONFIG_NFS_FS CONFIG_NFS_V4 CONFIG_NFS_V4_1 CONFIG_NFS_V4_2 CONFIG_CIFS \
+            CONFIG_USB_SERIAL CONFIG_USB_SERIAL_CH341 CONFIG_USB_SERIAL_CP210X \
+            CONFIG_USB_SERIAL_PL2303 CONFIG_USB_SERIAL_OPTION \
+            CONFIG_INPUT_JOYDEV CONFIG_KSM CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT ; do
+            grep -q "^${opt}=y" "$KCONFIG" || {
+              echo "ERROR: ${opt} is not enabled in $KCONFIG"; exit 1; }
+          done
+          echo "Advanced v1.1 config options present"
 
           KERNEL_RELEASE="$(strings "$IMAGE" | sed -n 's/^Linux version \([^ ]*\) .*/\1/p' | head -n1)"
           echo "Detected kernel release: $KERNEL_RELEASE"
@@ -383,10 +400,21 @@ jobs:
           )
           test -s "$OUT_ZIP"
 
+          # A145P Tuner KernelSU module
+          OUT_TUNER="$PWD/$REL/A145P-Tuner-v${VERSION}.zip"
+          (
+            cd a145p-tuner
+            ZIP_INPUTS="module.prop post-fs-data.sh service.sh uninstall.sh bin"
+            [ -f README.md ] && ZIP_INPUTS="$ZIP_INPUTS README.md"
+            zip -r -q "$OUT_TUNER" $ZIP_INPUTS
+          )
+          test -s "$OUT_TUNER"
+
           # Build info
           {
             echo "Kernel release : ${KERNEL_RELEASE}"
             echo "Package version: ${VERSION}"
+            echo "Variant        : advanced v1.1 (a145p_advanced.config + A145P Tuner)"
             echo "Built at (UTC)  : $(date -u '+%Y-%m-%d %H:%M:%S')"
             echo "Source commit   : ${FULL_SHA}"
             echo "Source date     : $(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S') (SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH})"
@@ -415,6 +443,7 @@ jobs:
           - \`A145P-Kernel-v${VERSION}-Odin.tar.md5\` — Odin AP slot package containing \`boot.img\`
           - \`images/Image\`, \`images/Image.gz\`, \`images/System.map\`, \`images/.config\`
           - \`A145P-BatteryCare-v1.0.zip\` — KernelSU module for charge limiting (50–100 %)
+          - \`A145P-Tuner-v${VERSION}.zip\` — KernelSU module with balanced/performance/battery profiles
           - \`build-info.txt\`, \`SHA256SUMS\`
 
           ## Features
@@ -423,6 +452,12 @@ jobs:
           - SYSVIPC / POSIX mqueue / IPC + PID + USER namespaces (Droidspaces-ready)
           - TMPFS POSIX ACL/XATTR, netfilter/ipset additions
           - Battery Care support (Samsung \`batt_full_capacity\` interface)
+          - nftables (inet/ip/ip6/arp/bridge) + NAT + TPROXY
+          - CAKE qdisc, MACVLAN/IPVLAN/VXLAN for containers
+          - TTL/HL target for tethering, connlabel/cpu/checksum xtables helpers
+          - SquashFS (XZ/LZ4/ZSTD), NFSv4.2, SMB/CIFS
+          - USB serial (CH341, CP210x, PL2303, GSM/CDMA modems)
+          - KSM (compiled in, inactive by default), kernel stack offset randomization
 
           ## Requirements
 
@@ -451,6 +486,21 @@ jobs:
           su -c "/data/adb/battery-care/battery-care on 80"
           su -c "/data/adb/battery-care/battery-care off"
           \`\`\`
+
+          ## A145P Tuner (KernelSU module)
+
+          Optional. Install \`A145P-Tuner-v${VERSION}.zip\` and reboot. The module
+          applies the \`balanced\` profile by default; switch profiles with:
+
+          \`\`\`sh
+          su -c "/data/adb/a145p-tuner/a145p-tuner status"
+          su -c "/data/adb/a145p-tuner/a145p-tuner profile battery"
+          su -c "/data/adb/a145p-tuner/a145p-tuner profile performance"
+          su -c "/data/adb/a145p-tuner/a145p-tuner profile balanced"
+          \`\`\`
+
+          All tunables are runtime-only and revert on reboot or module removal.
+          The module never changes thermal limits, voltages or CPU frequencies.
 
           ## Rollback
 
@@ -495,6 +545,7 @@ jobs:
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-Kernel-v${{ steps.meta.outputs.version }}-boot.img
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-Kernel-v${{ steps.meta.outputs.version }}-Odin.tar.md5
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-BatteryCare-v1.0.zip
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-Tuner-v${{ steps.meta.outputs.version }}.zip
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/RELEASE_NOTES.md
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/build-info.txt
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/SHA256SUMS
