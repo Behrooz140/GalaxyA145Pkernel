@@ -260,6 +260,17 @@ jobs:
           export PROJECT="mgk_64_k66"
           export MODE="user"
 
+          # a145p_advanced.config makes CONFIG_USB_SERIAL built-in so the
+          # usbserial core is always available without shipping .ko files.
+          # GKI's module_outs still lists drivers/usb/serial/usbserial.ko,
+          # and Kleaf fails when a declared module is not produced. Drop only
+          # that entry; ftdi_sio keeps building as a module.
+          sed -i '\#^[[:space:]]*"drivers/usb/serial/usbserial\.ko",#d' kernel-6.6/modules.bzl
+          if grep -q 'usbserial\.ko' kernel-6.6/modules.bzl; then
+            echo "ERROR: usbserial.ko still present in modules.bzl"; exit 1
+          fi
+          echo "modules.bzl: usbserial.ko removed from module_outs (built-in)"
+
           python3 "${DEVICE_MODULES_DIR}/scripts/gen_build_config.py" \
             --kernel-defconfig mediatek-bazel_defconfig \
             --kernel-defconfig-overlays "mt6768_overlay.config o22.config a145p_advanced.config" \
