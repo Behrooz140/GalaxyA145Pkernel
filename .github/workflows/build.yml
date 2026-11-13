@@ -266,6 +266,15 @@ jobs:
             --kernel-build-config-overlays "" \
             -m user -o "${BUILD_CONFIG}"
 
+          # Samsung's generated build.config.mtk prints warnings and an
+          # "EXT_MODULES=..." debug line to stdout. Newer Kleaf's workspace
+          # status script captures that stdout and treats each word as a
+          # project path ("Project EXT_MODULES ... does not exist on disk").
+          # The variables themselves are unaffected; drop only the echoes.
+          GEN_DIR="$(dirname "${BUILD_CONFIG}")"
+          test -f "${GEN_DIR}/build.config.mtk"
+          sed -i '/^[[:space:]]*echo /d' "${GEN_DIR}/build.config.mtk"
+
           chmod +x "./${DEVICE_MODULES_DIR}/build.sh"
           set +e
           "./${DEVICE_MODULES_DIR}/build.sh" 2>&1 | tee "${GITHUB_WORKSPACE}/build.log"
