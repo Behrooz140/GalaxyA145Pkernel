@@ -273,7 +273,9 @@ jobs:
           # The variables themselves are unaffected; drop only the echoes.
           GEN_DIR="$(dirname "${BUILD_CONFIG}")"
           test -f "${GEN_DIR}/build.config.mtk"
-          sed -i '/^[[:space:]]*echo /d' "${GEN_DIR}/build.config.mtk"
+          # Replace the echoes with a no-op instead of deleting the lines:
+          # some of them are the only statement in an if/else branch.
+          sed -i 's#^\([[:space:]]*\)echo .*#\1:#' "${GEN_DIR}/build.config.mtk"
 
           chmod +x "./${DEVICE_MODULES_DIR}/build.sh"
           set +e
