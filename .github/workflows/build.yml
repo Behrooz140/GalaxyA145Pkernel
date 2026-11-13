@@ -225,8 +225,18 @@ jobs:
           # Mirror the build: --nokleaf_localversion means the stamp script uses
           # kernel-6.6/scripts/setlocalversion, i.e. no git hash is embedded.
           unset KLEAF_USE_KLEAF_LOCALVERSION
+          MANIFEST="$PWD/${DEVICE_MODULES_DIR}/fake_manifest.xml"
+          if grep -q 'repo_root_s, repo_manifest' \
+              build/kernel/kleaf/workspace_status_stamp.py 2>/dev/null; then
+            # Newer Kleaf expects KLEAF_REPO_MANIFEST as
+            # <repo_root>:<manifest.xml>. The build itself passes only the
+            # manifest path, which bazel.py upgrades using the workspace root.
+            REPO_MANIFEST="$PWD:$MANIFEST"
+          else
+            REPO_MANIFEST="$MANIFEST"
+          fi
           STATUS="$(BUILD_NUMBER="${BUILD_NUMBER}" \
-            KLEAF_REPO_MANIFEST="$PWD/${DEVICE_MODULES_DIR}/fake_manifest.xml" \
+            KLEAF_REPO_MANIFEST="$REPO_MANIFEST" \
             SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
             python3 build/kernel/kleaf/workspace_status_stamp.py)"
           echo "$STATUS"
