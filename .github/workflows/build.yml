@@ -417,6 +417,43 @@ jobs:
             echo "Included $(find "$REL/modules" -name '*.ko' | wc -l) modules."
           fi
 
+          # CONFIG_MEDIATEK_CPU_DVFS=m, so the G75 OPP table - and with it the
+          # overclock - is compiled into CPU_DVFS.ko which the device loads
+          # from /vendor_dlkm/lib/modules. It is NOT part of Image, so the
+          # module must ship with every OC build.
+          DVFS_KO="$(find "$DIST" -type f -name 'CPU_DVFS.ko' | head -n1)"
+          [ -n "$DVFS_KO" ] && [ -f "$DVFS_KO" ] || {
+            echo "ERROR: CPU_DVFS.ko not found under $DIST"; exit 1; }
+          cp -v "$DVFS_KO" "$REL/CPU_DVFS-v${VERSION}.ko"
+
+          echo "=== CPU_DVFS.ko content check ==="
+          python3 - "$REL/CPU_DVFS-v${VERSION}.ko" "$STOCK_VERMAGIC" <<'PY'
+          import struct
+          import sys
+
+          path, stock_vermagic = sys.argv[1], sys.argv[2]
+          blob = open(path, 'rb').read()
+          failures = []
+
+          if b'name=CPU_DVFS' not in blob:
+              failures.append('module name is not CPU_DVFS')
+          if stock_vermagic.encode() not in blob:
+              failures.append('stock vermagic not found in module')
+
+          for label, (freq, volt) in {
+              'little 1.9 GHz @ 1.03125 V': (1900000, 103125),
+              'big 2.1 GHz @ 1.1125 V': (2100000, 111250),
+          }.items():
+              count = blob.count(struct.pack('<II', freq, volt))
+              print(f'  {label}: occurrences={count}')
+              if not count:
+                  failures.append(label)
+
+          if failures:
+              sys.exit('ERROR: CPU_DVFS.ko check failed: ' + ', '.join(failures))
+          print('CPU_DVFS.ko carries the G75 overclock table and the stock vermagic')
+          PY
+
           BOOT_IMG="$REL/A145P-Kernel-v${VERSION}-boot.img"
           MBOOTIMG="$GITHUB_WORKSPACE/.build-tools/mkbootimg/mkbootimg.py" \
           AVBTOOL="$GITHUB_WORKSPACE/.build-tools/avb/avbtool.py" \
@@ -480,6 +517,7 @@ jobs:
             echo "Boot partition  : ${BOOT_PARTITION_SIZE} bytes"
             echo "AVB signing key : AOSP testkey_rsa4096 (SHA256_RSA4096)"
             echo "Modules included: ${INCLUDE_MODULES}"
+            echo "DVFS module     : CPU_DVFS-v${VERSION}.ko (vendor_dlkm, carries the G75 OC table)"
             echo "Stock config    : configs/stock-a145pxxsddzh1.config"
           } | tee "$REL/build-info.txt"
 
@@ -498,6 +536,8 @@ jobs:
             (the release asset named \`default.config\` is the same file as \`images/.config\`)
           - \`A145P-BatteryCare-v1.0.zip\` — KernelSU module for charge limiting (50–100 %)
           - \`A145P-Tuner-v${VERSION}.zip\` — KernelSU module with balanced/performance/battery profiles
+          - \`CPU_DVFS-v${VERSION}.ko\` — CPU DVFS module carrying the overclocked G75 OPP table
+            (must be copied to \`/vendor_dlkm/lib/modules/CPU_DVFS.ko\`; see below)
           - \`build-info.txt\`, \`SHA256SUMS\`
 
           ## Features
@@ -520,7 +560,9 @@ jobs:
 
           This build is an experiment, not a daily-driver recommendation. Only the
           top OPP of the G75 table (CPU level 6, the table the SM-A145P uses) is
-          raised:
+          raised. The new frequencies take effect only after the overclocked
+          \`CPU_DVFS-v${VERSION}.ko\` is installed (see below); the boot image alone
+          keeps the stock clocks.
 
           | Cluster | Before | After | Vproc before | Vproc after |
           |---|---|---|---|---|
@@ -538,6 +580,55 @@ jobs:
           \`\`\`
 
           Expected: \`policy0 = 1900000\`, \`policy6 = 2100000\`.
+
+          ### Why a module and not only boot.img?
+
+          The kernel is built with \`CONFIG_MEDIATEK_CPU_DVFS=m\`, exactly like the
+          stock firmware, so the G75 OPP table lives inside \`CPU_DVFS.ko\`. That
+          module is loaded by \`init\` from \`/vendor_dlkm/lib/modules\`, not from
+          \`Image\`. Flashing the boot image alone therefore keeps the stock clocks.
+          The overclocked table is shipped as \`CPU_DVFS-v${VERSION}.ko\` and has to
+          replace the stock module of the same name.
+
+          ### Installing the overclocked DVFS module
+
+          Only do this after the matching boot image from this release is running
+          (\`uname -r\` ends with \`${BRAND_SUFFIX}\`). Copy the download to
+          \`/sdcard/Download/CPU_DVFS-v${VERSION}.ko\`, then:
+
+          \`\`\`sh
+          su -c '
+            set -e
+            M=/vendor_dlkm/lib/modules
+            mount -o rw,remount /vendor_dlkm
+            [ -f "\$M/CPU_DVFS.ko.stock" ] || cp -a "\$M/CPU_DVFS.ko" "\$M/CPU_DVFS.ko.stock"
+            cat /sdcard/Download/CPU_DVFS-v${VERSION}.ko > "\$M/CPU_DVFS.ko"
+            chown 0:0 "\$M/CPU_DVFS.ko"
+            chmod 0644 "\$M/CPU_DVFS.ko"
+            sync
+            ls -lZ "\$M/CPU_DVFS.ko" "\$M/CPU_DVFS.ko.stock"
+          '
+          \`\`\`
+
+          \`cat >\` (instead of \`cp\`) is intentional: it rewrites the existing inode,
+          so the SELinux label of the stock module is preserved. The original is
+          kept next to it as \`CPU_DVFS.ko.stock\`.
+
+          Reboot, then verify:
+
+          \`\`\`sh
+          su -c 'grep . /sys/devices/system/cpu/cpufreq/policy*/cpuinfo_max_freq; dmesg | grep -i -E "CPU_DVFS|mt_cpufreq" | tail -20'
+          \`\`\`
+
+          If \`/vendor_dlkm\` cannot be remounted read-write (dm-verity enforcing),
+          the module cannot be replaced at runtime; report the output of
+          \`getprop ro.boot.veritymode\` instead of forcing it.
+
+          ### Rollback (overclock)
+
+          1. \`su -c 'mount -o rw,remount /vendor_dlkm && cp -a /vendor_dlkm/lib/modules/CPU_DVFS.ko.stock /vendor_dlkm/lib/modules/CPU_DVFS.ko && sync'\`
+          2. Reboot. Clocks return to 1.8 / 2.0 GHz even on this kernel.
+          3. For a complete rollback flash the v1.3 \`boot.img\` with Odin.
 
           If the device bootloops, overheats or apps crash, flash the v1.3
           \`boot.img\` to return to stock clocks. Overclocking is inherently
@@ -655,6 +746,7 @@ jobs:
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-Kernel-v${{ steps.meta.outputs.version }}-Odin.tar.md5
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-BatteryCare-v1.0.zip
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/A145P-Tuner-v${{ steps.meta.outputs.version }}.zip
+            release/A145P-Kernel-v${{ steps.meta.outputs.version }}/CPU_DVFS-v${{ steps.meta.outputs.version }}.ko
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/RELEASE_NOTES.md
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/build-info.txt
             release/A145P-Kernel-v${{ steps.meta.outputs.version }}/SHA256SUMS
